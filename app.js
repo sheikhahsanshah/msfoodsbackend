@@ -23,16 +23,24 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 // CORS Configuration
-const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: [
-        'Content-Type',
-        'Authorization'
-    ],
+const allowedOrigins = [
+    'https://msfoods.vercel.app', // frontend URL
+    // other allowed origins...
+];
 
-};
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error(`CORS: Origin ${origin} not allowed`));
+            }
+        },
+        credentials: true,
+    })
+);
+
 
 // ✅ Parse JSON and URL-encoded data first
 app.use(express.json({ limit: '500kb' }));
