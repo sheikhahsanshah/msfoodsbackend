@@ -25,9 +25,12 @@ const app = express();
 
 // CORS Configuration
 const allowedOrigins = [
-    'https://msfoods.vercel.app', // frontend URL
-    // other allowed origins...
+    'https://msfoods.vercel.app',
+    'https://msfoods.pk',
+    'https://www.msfoods.pk',
+    'http://localhost:3000'
 ];
+
 const corsOptions = {
     origin: allowedOrigins || 'http://localhost:3000',
     credentials: true,
