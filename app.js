@@ -15,7 +15,7 @@ import userRoutes from './routes/userRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
-import adminUserRoutes from './routes/adminUserRoutes.js';
+import adminUserRoutes from './routes/adminUserRoutes.js';;
 import { sendContactEmail } from './controllers/contactController.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,29 +28,33 @@ const allowedOrigins = [
     'https://msfoods.vercel.app', // frontend URL
     // other allowed origins...
 ];
-
 const corsOptions = {
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error(`CORS: Origin ${origin} not allowed`));
-        }
-    },
-    credentials: true, // Allow cookies
+    origin: allowedOrigins || 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization'
+    ],
+
 };
 
-app.use(cors(corsOptions)); // Apply CORS configuration
+
+
+
 
 // ✅ Parse JSON and URL-encoded data first
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 
+app.use(cors(corsOptions));
+
 // Connect to MongoDB
 connectDB();
-
 // Middleware
+
 app.use(cookieParser());
+
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your_session_secret',
@@ -88,9 +92,10 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/settings', settingRoutes);
+app.use('/api/settings', settingRoutes); 
 app.use('/api/adminUser', adminUserRoutes);
 app.post('/api/send-email', sendContactEmail);
+
 
 // Health Check
 app.get('/api/health', (req, res) => {
