@@ -19,7 +19,7 @@ export const createSettings = async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 };
-
+ 
 export const getStats = async (req, res) => {
     try {
         const totalProducts = await Product.countDocuments();
