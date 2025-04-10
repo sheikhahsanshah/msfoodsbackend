@@ -1,7 +1,7 @@
 import category from '../models/category.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
-import Settings from '../models/settings.js';
+import Settings from '../models/Settings.js';
 
 // CREATE settings (Admin only)
 // This route creates the settings document only if one does not already exist.
