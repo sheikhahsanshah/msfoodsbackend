@@ -63,51 +63,90 @@ export const sendWhatsAppOTP = async (phone, otp, templateName, contactNumber, u
 
 export const sendWhatsAppOrderUpdate = async (phone, templateName, orderData) => {
     try {
+        const formatDateForTemplate = (date) => {
+            const options = {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            };
+            return new Date(date).toLocaleDateString('en-US', options);
+        };
+        
         // Map templates to their required parameters
         const templateConfig = {
-            order_confirmation_utility: {
-                components: [{
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: orderData.customer_name },
-                        { type: 'text', text: orderData.order_id },
-                        { type: 'text', text: orderData.item_count },
-                        { type: 'text', text: orderData.order_total },
-                        { type: 'text', text: orderData.preparation_time }
-                    ]
-                }]
+            order_process: {
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customer_name },
+                            { type: 'text', text: orderData.order_number },
+                            {
+                                type: 'text',
+                                text: formatDateForTemplate(orderData.estimated_date) // {{3}}
+                            }   
+                        ]
+                    },
+                    // {
+                    //     type: 'button',
+                    //     sub_type: 'url',
+                    //     index: 0,
+                    //     parameters: []
+                    // }
+                ]
             },
-            order_shipped_utility: {
-                components: [{
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: orderData.order_id },
-                        { type: 'text', text: orderData.tracking_id },
-                        { type: 'text', text: orderData.tracking_url }
-                    ]
-                }]
+            order_shipped: {
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customer_name },
+                            { type: 'text', text: orderData.tracking_id },
+                            {
+                                type: 'text',
+                                text: formatDateForTemplate(orderData.estimated_date)
+                            }
+                        ]
+                    }
+                ]
             },
-            order_delivered_utility: {
-                components: [{
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: orderData.order_id },
-                        { type: 'text', text: orderData.review_url }
-                    ]
-                }]
+            order_deliver: {
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customer_name }
+                        ]
+                    }
+                ]
             },
-            order_cancelled_utility: {
-                components: [{
-                    type: 'body',
-                    parameters: [
-                        { type: 'text', text: orderData.order_id },
-                        { type: 'text', text: orderData.refund_amount },
-                        { type: 'text', text: orderData.refund_days }
-                    ]
-                }]
+            order_return: {
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customer_name },
+                            { type: 'text', text: orderData.order_number }
+                        ]
+                    }
+                ]
+            },
+            order_cancel: {
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: orderData.customer_name },
+                            { type: 'text', text: orderData.order_number },
+                            {
+                                type: 'text',  // Changed from 'number' to 'text'
+                                text: (orderData.refund_days || 4).toString()
+                            }
+                        ]
+                    }
+                ]
             }
-        };  
-        
+        };
 
         if (!templateConfig[templateName]) {
             throw new Error(`Invalid template: ${templateName}`);

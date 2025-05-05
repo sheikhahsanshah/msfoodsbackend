@@ -81,7 +81,7 @@ export const updateProfile = async (req, res) => {
                 return handleError(res, 400, 'Email already in use');
             }
             user.email = email;
-            user.isVerified = false;
+            
         }
 
         // Handle password change

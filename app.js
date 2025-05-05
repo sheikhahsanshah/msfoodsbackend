@@ -17,6 +17,9 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';;
 import { sendContactEmail } from './controllers/contactController.js';
+import whatsappWebhookRoutes from './webhooks/routes/whatsappWebhookRoutes.js';
+import marketingRoutes from './webhooks/routes/marketingRoutes.js';
+import adRoutes from './routes/adRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,8 +100,15 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/settings', settingRoutes); 
 app.use('/api/adminUser', adminUserRoutes);
-app.post('/api/send-email', sendContactEmail);
+app.use('/api/webhook', whatsappWebhookRoutes);
+app.use('/api/webhook/marketing', marketingRoutes);
+app.use('/api/ad/', adRoutes);
+app.post('/api/webhook/whatsapp', (req, res) => {
+    console.log('Webhook received:', req.body);
+    res.status(200).send('OK');
+});
 
+app.post('/api/send-email', sendContactEmail);
 
 // Health Check
 app.get('/api/health', (req, res) => {

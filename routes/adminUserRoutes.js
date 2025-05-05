@@ -18,6 +18,7 @@ router.use(protect, admin);
 router.get('/', getFilteredUsers);
 router.get('/stats', getUserStatistics);
 router.get('/:id', getUserDetails);
+router.get('/whatsapp', getFilteredUsers);
 // New signup method route
 router.get('/signup-method/:method', getUsersBySignupMethod);
 // Existing modification routes

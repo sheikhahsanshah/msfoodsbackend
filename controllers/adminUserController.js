@@ -20,12 +20,18 @@ export const getFilteredUsers = async (req, res) => {
             createdAfter,
             createdBefore,
             sort = '-createdAt',
-            signupMethod
+            signupMethod,
+            hasRepliedOnWhatsApp
         } = req.query;
 
         // Base filter
         const filter = { isDeleted: { $ne: true } };
 
+        // Check if hasRepliedOnWhatsApp is passed and handle it as boolean
+        if (hasRepliedOnWhatsApp !== undefined) {
+            filter.hasRepliedOnWhatsApp = hasRepliedOnWhatsApp === 'true';  // Convert string 'true' to boolean true
+        }
+        
         // Text search
         if (search) {
             filter.$or = [
@@ -90,10 +96,9 @@ export const getFilteredUsers = async (req, res) => {
                     }
                 ];
 
-                const [users, total] = await Promise.all([
-                    User.aggregate(aggregation),
-                    User.countDocuments(filter)
-                ]);
+                const [users, total] = await Promise.all([usersQuery.exec(), User.countDocuments(filter)]);
+                console.log('Users:', users);
+                console.log('Total:', total);
 
                 return handleResponse(res, 200, 'Users retrieved successfully', {
                     users: users.map(user => ({

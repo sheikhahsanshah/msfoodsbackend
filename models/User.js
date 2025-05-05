@@ -13,12 +13,20 @@ const userSchema = new mongoose.Schema(
             unique: true,
             lowercase: true,
             sparse: true,
+            index: {
+                unique: true,
+                partialFilterExpression: { email: { $type: 'string' } }
+            },
             match: [/\S+@\S+\.\S+/, 'Please enter a valid email address']
         },
         phone: {
             type: String,
             unique: true,
             sparse: true,
+            index: {
+                unique: true,
+                partialFilterExpression: { phone: { $type: 'string' } }
+            },
             validate: {
                 validator: function (v) {
                     return /^\+?[1-9]\d{1,14}$/.test(v);
@@ -74,7 +82,14 @@ const userSchema = new mongoose.Schema(
         orders: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Order'
-        }]
+        }],
+        hasRepliedOnWhatsApp: {
+            type: Boolean,
+            default: false
+        },
+        lastWhatsAppReply: {
+            type: Date
+        }
     },
     {
         timestamps: true,
@@ -82,6 +97,8 @@ const userSchema = new mongoose.Schema(
         toObject: { virtuals: true }
     }
 );
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
 
 // Virtuals
 userSchema.virtual('orderCount', {

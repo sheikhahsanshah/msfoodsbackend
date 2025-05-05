@@ -20,7 +20,7 @@ export const orderController = {
             const { items, shippingAddress, paymentMethod, couponCode } = req.body;
             const user = req.user;
             const isGuest = !user;
-            console.log("yser is ", req.user);
+            console.log("user is ", req.user);
 
             // Validate required fields
             const requiredFields = ['fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'];
@@ -52,18 +52,24 @@ export const orderController = {
                     return handleError(res, 400, error.message); // Return specific error message
                 }
             }
-            console.log('Coupon validation checks:', {
-                isActive: coupon.isActive,
-                dateValid: coupon.startAt <= Date.now() && coupon.expiresAt > Date.now(),
-                usageLimit: coupon.usedCoupons < coupon.totalCoupons,
-                minPurchase: subtotal >= coupon.minPurchase,
-                maxPurchase: !coupon.maxPurchase || subtotal <= coupon.maxPurchase,
-                eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
-                eligibleProducts: !coupon.eligibleProducts?.length || orderItems.some(item =>
-                    coupon.eligibleProducts.some(p => p._id.equals(item.product))
-                ),
-                
-            });
+            /* The above code is declaring a variable `coupon` and initializing it with a value of
+            `null`. It then logs the string 'Coup' to the console. However, the code is incomplete
+            and ends abruptly with ' */
+
+            if (coupon) {
+                console.log('Coupon validation checks:', {
+                    isActive: coupon?.isActive,
+                    dateValid: coupon?.startAt <= Date.now() && coupon?.expiresAt > Date.now(),
+                    usageLimit: coupon?.usedCoupons < coupon?.totalCoupons,
+                    minPurchase: subtotal >= coupon?.minPurchase,
+                    maxPurchase: !coupon?.maxPurchase || subtotal <= coupon?.maxPurchase,
+                    eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
+                    eligibleProducts: !coupon.eligibleProducts?.length || orderItems.some(item =>
+                        coupon.eligibleProducts.some(p => p._id.equals(item.product))
+                    ),
+
+                });
+            }
 
             // Calculate totals
             const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
@@ -98,7 +104,8 @@ export const orderController = {
             await session.commitTransaction();
 
             // Send notifications
-            await sendOrderNotifications(order, user);
+            await sendStatusNotifications(order, 'Processing');
+
 
             handleResponse(res, 201, 'Order created successfully', order);
 
@@ -525,40 +532,64 @@ const sendStatusNotifications = async (order, status) => {
             email: populatedOrder.user.email
         } : order.shippingAddress;
 
-        // Common WhatsApp parameters
+        // Common parameters
         const baseParams = {
-            order_id: order._id.toString(),
-            support_phone: process.env.SUPPORT_PHONE
+            order_url: `${process.env.BASE_URL}/user/dashboard/order-history/${order._id}`,
+            customer_name: order.shippingAddress.fullName.split(' ')[0],
+            order_number: order._id.toString().substr(-6)
+        };
+        const formatDateForTemplate = (date) => {
+            const options = {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            };
+            return new Date(date).toLocaleDateString('en-US', options);
         };
 
         // Status-specific parameters
         const statusParams = {
+            Processing: {
+                template: 'order_process',
+                params: {
+                    estimated_date: formatDateForTemplate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000))
+                }
+            },
             Shipped: {
-                tracking_id: order.trackingId,
-                tracking_url: order.trackingId ?
-                    `${process.env.TRACKING_BASE_URL}/${order.trackingId}` : 'Not available'
+                template: 'order_shipped',
+                params: {
+                    tracking_id: order.trackingId || 'Not available, will update soon',
+                    estimated_date: formatDateForTemplate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000))
+                }
             },
             Delivered: {
-                review_url: `${process.env.BASE_URL}/reviews/${order._id}`
+                template: 'order_deliver',
+                params: {} // Only customer_name is needed from baseParams
+            },
+            Returned: {
+                template: 'order_return',
+                params: {} // customer_name and order_number from baseParams
             },
             Cancelled: {
-                refund_amount: order.paymentMethod === 'PayFast' ?
-                    `Rs${order.totalAmount.toFixed(2)}` : 'Rs0.00',
-                refund_days: order.paymentMethod === 'PayFast' ? '5-7' : 'N/A'
+                template: 'order_cancel',
+                params: {
+                    estimated_date: 4,
+                }
             }
         };
 
         if (statusParams[status]) {
-            // Send WhatsApp notification
+            const templateConfig = statusParams[status];
+            const fullParams = { ...baseParams, ...templateConfig.params };
+
             if (contactInfo.phone) {
                 await sendWhatsAppOrderUpdate(
                     contactInfo.phone,
-                    `order_${status.toLowerCase()}_utility`,
-                    { ...baseParams, ...statusParams[status] }
+                    templateConfig.template,
+                    fullParams
                 );
             }
 
-            // Send email notification
             if (contactInfo.email) {
                 await transporter.sendMail({
                     from: process.env.EMAIL_FROM,

@@ -42,9 +42,18 @@ const upload = multer(
     },
 }).array("images", 10); // Handle up to 10 images
 
+
+const uploadFields = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+}).fields([
+    { name: 'mobileImage', maxCount: 1 },
+    { name: 'desktopImage', maxCount: 1 },
+]);
+
 // Generic delete function
 const deleteFromCloudinary = async (publicId) => {
     await cloudinary.uploader.destroy(publicId);
 };
 
-export { upload, cloudinary, deleteFromCloudinary };
+export { upload, uploadFields, cloudinary, deleteFromCloudinary };

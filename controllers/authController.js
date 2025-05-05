@@ -36,39 +36,32 @@ const prepareUserData = (user) => {
 export const signup = async (req, res) => {
     try {
         const { name, email, password, phone, verificationMethod } = req.body;
-        console.log("req body:", req.body);
-        console.log("req body:", { verificationMethod, phone, email, name, password });
 
         if (!name || !password || !verificationMethod) {
             return handleError(res, 400, 'Name, password, and verification method are required');
         }
 
-        if (verificationMethod === 'email' && !email) {
-            return handleError(res, 400, 'Email is required for email verification');
+        // build query & data only for the chosen method
+        let existingUser;
+        if (verificationMethod === 'email') {
+            if (!email) return handleError(res, 400, 'Email is required');
+            existingUser = await User.findOne({ email: email.toLowerCase() });
+        } else {
+            if (!phone) return handleError(res, 400, 'Phone is required');
+            existingUser = await User.findOne({ phone });
         }
 
-        if (verificationMethod === 'phone' && !phone) {
-            return handleError(res, 400, 'Phone is required for phone verification');
-        }
-        const query = [];
-        if (email) query.push({ email });
-        if (phone) query.push({ phone });
-
-        const existingUser = query.length ? await User.findOne({ $or: query }) : null;
-
-
-        
         if (existingUser) {
-            return handleError(res, 400, 'User with this email or phone already exists');
+            const field = verificationMethod === 'email' ? 'email' : 'phone';
+            return handleError(res, 400, `User with this ${field} already exists`);
         }
 
-        const user = await User.create({
-            name,
-            email,
-            password,
-            phone,
-            verificationMethod,
-        });
+        // only include the one we need
+        const userData = { name, password };
+        if (verificationMethod === 'email') userData.email = email.toLowerCase();
+        else userData.phone = phone;
+
+        const user = new User(userData);
 
         if (verificationMethod === 'email') {
             user.emailVerificationToken = generateEmailVerificationToken();
@@ -87,7 +80,8 @@ export const signup = async (req, res) => {
 
         }
 
-        await user.save();
+            await user.save();
+      
 
         handleResponse(res, 201, 'Verification code sent', {
             id: user._id,
