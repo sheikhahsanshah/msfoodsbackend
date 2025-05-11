@@ -5,17 +5,25 @@ import User from '../models/User.js';
 
 // middlewares/auth.js
 export const protect = async (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) return handleError(res, 401, 'Not authenticated');
-    console.log("kencike ec cds");
     try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return handleError(res, 401, "No token provided");
+        }
+
+        const token = authHeader.split(" ")[1];
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-        req.user = await User.findById(decoded.id).select('-password');
-        
+
+        const user = await User.findById(decoded.id).select("-password");
+        if (!user) {
+            return handleError(res, 401, "User no longer exists");
+        }
+
+        req.user = user;
         next();
     } catch (error) {
-        handleError(res, 401, 'Invalid token');
+        console.error("Token error:", error.message);
+        handleError(res, 401, "Invalid token");
     }
 };
 

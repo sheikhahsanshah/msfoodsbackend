@@ -331,8 +331,16 @@ export const refreshToken = async (req, res) => {
 // Get Current User Controller
 export const getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.session.user.id).select('-password');
-        handleResponse(res, 200, 'Current user retrieved', prepareUserData(user));
+        if (!req.user || !req.user._id) {
+            return handleError(res, 401, "User not found in request");
+        }
+
+        const user = await User.findById(req.user._id).select("-password");
+        if (!user) {
+            return handleError(res, 404, "User not found");
+        }
+
+        handleResponse(res, 200, "Current user retrieved", prepareUserData(user));
     } catch (error) {
         handleError(res, 500, error.message);
     }
