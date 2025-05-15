@@ -63,7 +63,7 @@ export const orderController = {
                     usageLimit: coupon?.usedCoupons < coupon?.totalCoupons,
                     minPurchase: subtotal >= coupon?.minPurchase,
                     maxPurchase: !coupon?.maxPurchase || subtotal <= coupon?.maxPurchase,
-                    eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
+                    eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(user._id)),
                     eligibleProducts: !coupon.eligibleProducts?.length || orderItems.some(item =>
                         coupon.eligibleProducts.some(p => p._id.equals(item.product))
                     ),
