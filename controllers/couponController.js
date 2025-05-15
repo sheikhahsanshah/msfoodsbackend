@@ -86,7 +86,7 @@ export const validateCoupon = async (req, res) => {
         const userId = req.user._id;
         const currentTime = new Date();
 
-        const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+        const coupon = await Coupon.findOne({ code: code.toUpperCase() }).lean();
 
         if (!coupon || !coupon.isActive) {
             return handleError(res, 404, 'Invalid coupon code');
@@ -132,13 +132,6 @@ export const validateCoupon = async (req, res) => {
 
         discount = Math.min(discount, cartTotal);
 
-        coupon.usedCoupons += 1;
-        if (userUsage) {
-            userUsage.timesUsed += 1;
-        } else {
-            coupon.usedBy.push({ userId, timesUsed: 1 });
-        }
-        await coupon.save();
 
         handleResponse(res, 200, 'Coupon is valid', {
             valid: true,
