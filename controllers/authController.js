@@ -40,6 +40,9 @@ export const signup = async (req, res) => {
         if (!name || !password || !verificationMethod) {
             return handleError(res, 400, 'Name, password, and verification method are required');
         }
+        // figure out which “field” we’re dealing with
+        const lookupField = verificationMethod === 'email' ? 'email' : 'phone'
+        
 
         // build query & data only for the chosen method
         let existingUser;
@@ -52,8 +55,29 @@ export const signup = async (req, res) => {
         }
 
         if (existingUser) {
-            const field = verificationMethod === 'email' ? 'email' : 'phone';
-            return handleError(res, 400, `User with this ${field} already exists`);
+            // If they signed up before but never verified, just resend:
+            if (!existingUser.isVerified) {
+                if (verificationMethod === 'email') {
+                    existingUser.emailVerificationToken = generateEmailVerificationToken();
+                    existingUser.emailVerificationExpires = Date.now() + 3600000; // 1h
+                    const url = `${process.env.CLIENT_URL}/auth/verify-email/${existingUser.emailVerificationToken}`;
+                    await sendEmail({
+                        email: existingUser.email,
+                        subject: 'Please verify your email again',
+                        html: verificationEmail(existingUser.name, url),
+                    });
+                } else {
+                    const otp = generateVerificationCode();
+                    existingUser.phoneVerificationCode = otp;
+                    existingUser.phoneVerificationExpires = Date.now() + 15 * 60 * 1000;
+                    await sendWhatsAppOTP(existingUser.phone, otp, 'resendotp', '+92 342 0411505');
+                }
+                await existingUser.save();
+                // 200 so the frontend still goes to “check your inbox/phone” UI
+                return handleResponse(res, 200, 'Verification code resent');
+            }
+            // Truly already verified → hard conflict
+            return handleError(res, 400, `User with this ${lookupField} already exists`)
         }
 
         // only include the one we need
@@ -76,7 +100,7 @@ export const signup = async (req, res) => {
             const otp = generateVerificationCode();
             user.phoneVerificationCode = otp;
             user.phoneVerificationExpires = Date.now() + 15 * 60 * 1000; // 15 mins expiry
-            await sendWhatsAppOTP(phone, otp, 'signupotp', '+923256897669'); // Use signupotp template
+            await sendWhatsAppOTP(phone, otp, 'signupotp', '+92 342 0411505'); // Use signupotp template
 
         }
 
@@ -161,6 +185,14 @@ export const login = async (req, res) => {
 
         if (!user) return handleError(res, 401, 'Invalid credentials');
         if (!user.isVerified) return handleError(res, 403, 'Please verify your account first');
+        if (user.isBlocked) return handleError(res, 403, 'Your account is blocked. Please contact support.');
+        if (user.suspendedUntil && user.suspendedUntil > new Date()) {
+            return handleError(
+                res,
+                403,
+                `Your account is suspended until ${user.suspendedUntil.toLocaleString()}.`
+            );
+        }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return handleError(res, 401, 'Invalid credentials');
@@ -210,7 +242,7 @@ export const forgotPassword = async (req, res) => {
             resetCode = generatePasswordResetOTP();
             user.resetToken = crypto.createHash('sha256').update(resetCode).digest('hex');
             user.resetExpires = Date.now() + 15 * 60 * 1000; // 15 mins expiry
-            await sendWhatsAppOTP(user.phone, resetCode, 'forgototp', '+923256897669'); // Use forgototp 
+            await sendWhatsAppOTP(user.phone, resetCode, 'forgototp', '+92 342 0411505'); // Use forgototp 
             
             
 
@@ -282,7 +314,7 @@ export const resendVerification = async (req, res) => {
             const otp = generateVerificationCode(); // Generate new OTP
             user.phoneVerificationCode = otp;
             user.phoneVerificationExpires = Date.now() + 15 * 60 * 1000; // 15 mins expiry
-            await sendWhatsAppOTP(user.phone, otp, 'resendotp', '+923256897669'); // Use resendotp template
+            await sendWhatsAppOTP(user.phone, otp, 'resendotp', '+92 342 0411505'); // Use resendotp template
         }
 
         await user.save();

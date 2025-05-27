@@ -1,3 +1,4 @@
+// models/Settings.js
 import mongoose from "mongoose";
 
 const settingsSchema = new mongoose.Schema(
@@ -7,11 +8,17 @@ const settingsSchema = new mongoose.Schema(
             required: true,
             default: 0,
         },
+        freeShippingThreshold: {
+            type: Number,
+            required: true,
+            default: 3000,    // new!
+        },
     },
     { timestamps: true }
 );
 
-// Use the fallback to prevent redefinition during hot reloads
-const Settings = mongoose.models.Settings || mongoose.model("Settings", settingsSchema);
+const Settings =
+    mongoose.models.Settings ||
+    mongoose.model("Settings", settingsSchema);
 
 export default Settings;

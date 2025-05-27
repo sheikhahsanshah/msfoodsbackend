@@ -79,10 +79,6 @@ const userSchema = new mongoose.Schema(
                 }
             }
         ],
-        orders: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Order'
-        }],
         hasRepliedOnWhatsApp: {
             type: Boolean,
             default: false
@@ -107,6 +103,16 @@ userSchema.virtual('orderCount', {
     foreignField: 'user',
     count: true
 });
+
+
+
+userSchema.virtual('orders', {
+    ref: 'Order',
+    localField: '_id',
+    foreignField: 'user',
+    justOne: false
+});
+
 
 userSchema.virtual('totalSpent', {
     ref: 'Order',

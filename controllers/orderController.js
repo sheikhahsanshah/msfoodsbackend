@@ -30,13 +30,16 @@ export const orderController = {
                 return handleError(res, 400, `Missing shipping fields: ${missingFields.join(', ')}`);
             }
 
-            // Get shipping settings
-            const settings = await Settings.findOne().session(session);
-            const shippingCost = settings?.shippingFee || 0;
 
             // Process order items
             const [orderItems, subtotal] = await processOrderItems(items, session);
 
+            const settings = await Settings.findOne().session(session) || {};
+            const shippingFee = settings.shippingFee ?? 0;
+            const freeThreshold = settings.freeShippingThreshold ?? 3000;
+            const shippingCost = subtotal > freeThreshold ? 0 : shippingFee;
+
+            
             // Handle coupon validation
             let coupon = null;
             // In createOrder method
@@ -73,7 +76,14 @@ export const orderController = {
 
             // Calculate totals
             const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
-            const totalAmount = calculateTotal(subtotal, shippingCost, discount);
+            const codFee = paymentMethod === 'COD' ? 50 : 0;
+
+            const totalAmount = calculateTotal(
+                subtotal,
+                shippingCost,
+                discount,
+                codFee
+            );
 
             // Create order document
             const order = new Order({
@@ -82,6 +92,7 @@ export const orderController = {
                 subtotal,
                 shippingCost,
                 discount,
+                codFee,
                 totalAmount,
                 shippingAddress,
                 paymentMethod,
@@ -465,8 +476,8 @@ const updateCouponUsage = async (coupon, userId, session) => {
     await coupon.save({ session });
 };
 
-const calculateTotal = (subtotal, shipping, discount) => {
-    return Math.max(0, (subtotal - discount) + shipping);
+const calculateTotal = (subtotal, shipping, discount, codFee = 0) => {
+    return Math.max(0, subtotal - discount + shipping + codFee);
 };
 
 const restoreStock = async (items, session) => {

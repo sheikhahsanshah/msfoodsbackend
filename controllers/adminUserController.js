@@ -71,8 +71,13 @@ export const getFilteredUsers = async (req, res) => {
                     {
                         $lookup: {
                             from: 'orders',
-                            localField: '_id',
-                            foreignField: 'user',
+                            let: { userId: '$_id' },
+                            pipeline: [
+                                { $match: { $expr: { $eq: ['$user', '$$userId'] } } },
+                                { $sort: { createdAt: -1 } },
+                                { $project: { totalAmount: 1, status: 1, createdAt: 1 } },
+                                { $limit: 5 }
+                            ],
                             as: 'orders'
                         }
                     },
@@ -91,14 +96,17 @@ export const getFilteredUsers = async (req, res) => {
                             refreshToken: 0,
                             emailVerificationToken: 0,
                             addresses: 0,
-                            orders: 0
+                            
                         }
                     }
                 ];
 
-                const [users, total] = await Promise.all([usersQuery.exec(), User.countDocuments(filter)]);
-                console.log('Users:', users);
-                console.log('Total:', total);
+                const [users, totalArr] = await Promise.all([
+                    User.aggregate(aggregation),
+                    User.countDocuments(filter)
+                ]);
+
+                const total = totalArr;
 
                 return handleResponse(res, 200, 'Users retrieved successfully', {
                     users: users.map(user => ({
@@ -113,6 +121,7 @@ export const getFilteredUsers = async (req, res) => {
                         limit: Number(limit)
                     }
                 });
+
             } catch (aggError) {
                 return handleError(res, 500, 'Aggregation error', aggError);
             }
@@ -125,8 +134,13 @@ export const getFilteredUsers = async (req, res) => {
                 .sort(sort)
                 .skip((page - 1) * limit)
                 .limit(Number(limit))
-                .lean();
-
+                .populate({
+                    path: 'orders', // This is a virtual, so this will work only if toObject/toJSON has virtuals: true
+                    select: 'totalAmount status createdAt',
+                    match: { status: { $ne: 'Cancelled' } },
+                    options: { sort: { createdAt: -1 } }
+                });
+            
             const [users, total] = await Promise.all([
                 usersQuery.exec(),
                 User.countDocuments(filter)
@@ -142,15 +156,18 @@ export const getFilteredUsers = async (req, res) => {
                         ])
                     ]);
 
+                    const userObj = user.toObject(); // 🔑 Important
+
                     return {
-                        ...user,
+                        ...userObj,
                         orderCount: orderCount || 0,
                         totalSpent: totalSpent[0]?.total || 0,
-                        signupMethod: user.email && user.phone ? 'both' :
-                            user.email ? 'email' : 'phone'
+                        signupMethod: userObj.email && userObj.phone ? 'both' :
+                            userObj.email ? 'email' : 'phone'
                     };
                 })
             );
+
 
             handleResponse(res, 200, 'Users retrieved successfully', {
                 users: usersWithStats,
@@ -189,11 +206,16 @@ export const getUsersBySignupMethod = async (req, res) => {
 
         const [users, total] = await Promise.all([
             User.find(filter)
-                .select('name email phone createdAt role isVerified')
-                .sort('-createdAt')
+                .select('-password -refreshToken -emailVerificationToken -addresses')
+                .sort(sort)
                 .skip((page - 1) * limit)
                 .limit(Number(limit))
-                .lean(),
+                .populate({
+                    path: 'orders',
+                    select: 'totalAmount status createdAt',
+                    match: { status: { $ne: 'Cancelled' } },
+                    options: { sort: { createdAt: -1 } }
+                }),
             User.countDocuments(filter)
         ]);
 
