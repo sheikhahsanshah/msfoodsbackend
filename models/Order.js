@@ -65,7 +65,8 @@ const orderSchema = new mongoose.Schema({
         id: String,
         status: String,
         update_time: String,
-        email_address: String
+        email_address: String,
+        rawData: mongoose.Schema.Types.Mixed      // to store full notify payload if desired
     },
     couponUsed: {
         type: mongoose.Schema.Types.ObjectId,

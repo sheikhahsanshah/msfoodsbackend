@@ -102,7 +102,8 @@ export const orderController = {
 
             // Payment integration
             if (paymentMethod === 'PayFast') {
-                order.paymentResult = generatePayfastPayload(order);
+                order.status = 'Pending';
+                    order.paymentResult = generatePayfastPayload(order);
             }
 
             await order.save({ session });
@@ -259,28 +260,48 @@ export const orderController = {
         }
     },
 
-    // Handle PayFast notification
+    
+    
     handlePayfastNotification: async (req, res) => {
         try {
-            const data = req.body;
-            const signature = data.signature;
-
+            const data = { ...req.body };
+            const receivedSignature = data.signature;
             delete data.signature;
-            const isValid = verifyPayfastSignature(data, signature);
 
-            if (!isValid) return res.status(400).send('Invalid signature');
+            // Reconstruct & verify
+            let sigString = Object.keys(data)
+                .sort()
+                .map(k => `${k}=${encodeURIComponent(data[k])}`)
+                .join('&');
+            if (process.env.PAYFAST_PASSPHRASE) {
+                sigString += `&passphrase=${encodeURIComponent(process.env.PAYFAST_PASSPHRASE)}`;
+            }
+            const expectedSig = crypto.createHash('md5').update(sigString).digest('hex');
+            if (expectedSig !== receivedSignature) {
+                return res.status(400).send('Invalid signature');
+            }
 
+            // Lookup order
             const order = await Order.findById(data.m_payment_id);
             if (!order) return res.status(404).send('Order not found');
 
-            updateOrderFromPayment(order, data);
+            // Update paymentResult & status
+            order.paymentResult = {
+                id: data.pf_payment_id,
+                status: data.payment_status,
+                update_time: new Date().toISOString(),
+                rawData: data
+            };
+            order.status = data.payment_status === 'COMPLETE' ? 'Processing' : 'Cancelled';
             await order.save();
 
             res.status(200).end();
-        } catch (error) {
+        } catch (err) {
+            console.error(err);
             res.status(500).send('Server error');
         }
     },
+
 
     // Get sales statistics (Admin)
     getSalesStats: async (req, res) => {
@@ -619,7 +640,7 @@ const authorizeOrderAccess = (order, user) => {
     return order.user?.equals(user._id) || user.role === 'admin';
 };
 
-const generatePayfastPayload = (order) => {
+export const generatePayfastPayload = (order) => {
     const params = {
         merchant_id: process.env.PAYFAST_MERCHANT_ID,
         merchant_key: process.env.PAYFAST_MERCHANT_KEY,
@@ -628,27 +649,28 @@ const generatePayfastPayload = (order) => {
         notify_url: process.env.PAYFAST_NOTIFY_URL,
         m_payment_id: order._id.toString(),
         amount: order.totalAmount.toFixed(2),
-        item_name: `Order #${order._id}`
+        item_name: `Sandbox Order #${order._id}`
     };
 
-    if (process.env.PAYFAST_PASSPHRASE) {
-        params.passphrase = process.env.PAYFAST_PASSPHRASE;
-    }
-
-    const signatureString = Object.keys(params)
+    // If you have a passphrase, include it in the signature string:
+    let signatureString = Object.keys(params)
         .sort()
         .map(key => `${key}=${encodeURIComponent(params[key])}`)
         .join('&');
 
-    params.signature = crypto.createHash('md5')
-        .update(signatureString)
-        .digest('hex');
+    if (process.env.PAYFAST_PASSPHRASE) {
+        signatureString += `&passphrase=${encodeURIComponent(process.env.PAYFAST_PASSPHRASE)}`;
+    }
+
+    const signature = crypto.createHash('md5').update(signatureString).digest('hex');
+    params.signature = signature;
 
     return {
         redirectUrl: `${process.env.PAYFAST_URL}?${new URLSearchParams(params)}`,
         status: 'pending'
     };
 };
+
 
 const verifyPayfastSignature = (data, receivedSignature) => {
     let signatureString = Object.keys(data)
