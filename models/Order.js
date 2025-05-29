@@ -66,6 +66,7 @@ const orderSchema = new mongoose.Schema({
         status: String,
         update_time: String,
         email_address: String,
+        redirectUrl: String,
         rawData: mongoose.Schema.Types.Mixed      // to store full notify payload if desired
     },
     couponUsed: {
