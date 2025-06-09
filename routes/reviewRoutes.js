@@ -15,6 +15,6 @@ router.post('/', protect, upload, createReview);
 router.get('/allReviews', protect, admin, getAllReviews);
 router.get('/:productId', getProductReviews);
 router.put('/:id', protect,admin, updateReview);
-router.delete('/:id', protect, deleteReview);
+router.delete('/:id', protect, admin, deleteReview);
 
 export default router;

@@ -1,13 +1,13 @@
 import transporter from '../config/email.js';
 
 export const sendContactEmail = async (req, res) => {
-    const { name, email, subject, message } = req.body;
+    const { name, email, subject, message, phone } = req.body;
 
     const mailOptions = {
-        from: email,
+        // from: email,
         to: process.env.EMAIL_USER,
         subject: `Contact Form: ${subject}`,
-        text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}`,
+        text: `Name: ${name}\nPhone: ${phone}\n Message: ${message}`,
     };
 
     try {

@@ -216,27 +216,17 @@ export const updateReview = async (req, res) => {
 export const deleteReview = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user._id;
 
-        const review = await Review.findOne({
-            _id: id,
-            $or: [
-                { user: userId },
-                { role: 'admin' }
-            ]
-        });
-
+        // find & delete in one shot
+        const review = await Review.findByIdAndDelete(id);
         if (!review) {
             return handleError(res, 404, 'Review not found');
         }
 
-        const productId = review.product;
-        await review.remove();
+        // recalc based on the deleted review's product
+        await calculateProductRatings(review.product);
 
-        // Update product ratings
-        await calculateProductRatings(productId);
-
-        handleResponse(res, 200, 'Review deleted successfully', null);
+        return handleResponse(res, 200, 'Review deleted successfully', null);
 
     } catch (error) {
         handleError(res, 500, error.message);
