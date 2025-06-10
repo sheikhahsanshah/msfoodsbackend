@@ -22,7 +22,7 @@ import whatsappWebhookRoutes from './webhooks/routes/whatsappWebhookRoutes.js';
 import marketingRoutes from './webhooks/routes/marketingRoutes.js';
 import adRoutes from './routes/adRoutes.js';
 import payfastRouter from './routes/payfast.js'
-
+import paymentMethodRoutes from './routes/paymentMethodRoutes.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -111,7 +111,7 @@ app.post('/api/webhook/whatsapp', (req, res) => {
     res.status(200).send('OK');
 });
 app.use('/api/payfast', payfastRouter)
-
+app.use('/api/payment-methods', paymentMethodRoutes);
 app.post('/api/send-email', sendContactEmail);
 
 // Health Check

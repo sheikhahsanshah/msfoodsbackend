@@ -58,9 +58,14 @@ const orderSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['COD', 'PayFast'],
+        enum: ['COD', 'BankTransfer'],
         required: true
+    }, paymentStatus: {
+        type: String,
+        enum: ['Pending', 'Confirmed', 'Declined'],
+        default: 'Pending'
     },
+    paymentScreenshot: String,  // URL/path to the user’s proof
     paymentResult: {
         id: String,
         status: String,

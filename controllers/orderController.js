@@ -17,77 +17,93 @@ export const orderController = {
         session.startTransaction();
 
         try {
-            const { items, shippingAddress, paymentMethod, couponCode } = req.body;
-            const user = req.user;
-            const isGuest = !user;
-            console.log("user is ", req.user);
+            // 1) Extract & parse body fields
+            let { paymentMethod, couponCode } = req.body;
+            let items = req.body.items;
+            let shippingAddress = req.body.shippingAddress;
 
-            // Validate required fields
-            const requiredFields = ['fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'];
-            const missingFields = requiredFields.filter(field => !shippingAddress[field]);
-            if (missingFields.length) {
-                await session.abortTransaction();
-                return handleError(res, 400, `Missing shipping fields: ${missingFields.join(', ')}`);
+            // If sent as FormData, these arrive as strings → parse them
+            if (typeof items === 'string') {
+                items = JSON.parse(items);
+            }
+            if (typeof shippingAddress === 'string') {
+                shippingAddress = JSON.parse(shippingAddress);
             }
 
+            // 2) Validate shippingAddress
+            const required = [
+                'fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'
+            ];
+            const missing = required.filter(f => !shippingAddress[f]);
+            if (missing.length) {
+                await session.abortTransaction();
+                return handleError(
+                    res,
+                    400,
+                    `Missing shipping fields: ${missing.join(', ')}`
+                );
+            }
 
-            // Process order items
+            // 3) Handle payment proof for BankTransfer
+            let screenshotUrl = '';
+            if (paymentMethod === 'BankTransfer') {
+                // if you used .single('paymentScreenshot'):
+                const proofFile = req.file
+                    // or if you used .fields([...,'paymentScreenshot']):
+                    || (req.files?.paymentScreenshot && req.files.paymentScreenshot[0]);
+
+                if (!proofFile) {
+                    await session.abortTransaction();
+                    return handleError(
+                        res,
+                        400,
+                        'Payment proof screenshot is required for bank transfer'
+                    );
+                }
+                // CloudinaryStorage gives you .path or .url
+                screenshotUrl = proofFile.path || proofFile.url;
+            }
+
+            // 4) Process items & compute subtotal
             const [orderItems, subtotal] = await processOrderItems(items, session);
 
+            // 5) Compute shipping
             const settings = await Settings.findOne().session(session) || {};
-            const shippingFee = settings.shippingFee ?? 0;
-            const freeThreshold = settings.freeShippingThreshold ?? 3000;
-            const shippingCost = subtotal > freeThreshold ? 0 : shippingFee;
+            const fee = settings.shippingFee ?? 0;
+            const threshold = settings.freeShippingThreshold ?? 3000;
+            const shippingCost = subtotal > threshold ? 0 : fee;
 
-            
-            // Handle coupon validation
+            // 6) Coupon validation (optional)
             let coupon = null;
-            // In createOrder method
             if (couponCode) {
-                if (isGuest) {
+                if (!req.user) {
                     await session.abortTransaction();
                     return handleError(res, 401, 'Authentication required for coupon use');
                 }
                 try {
-                    coupon = await validateCoupon(couponCode, user._id, subtotal, orderItems, session);
-                } catch (error) {
+                    coupon = await validateCoupon(
+                        couponCode,
+                        req.user._id,
+                        subtotal,
+                        orderItems,
+                        session
+                    );
+                } catch (err) {
                     await session.abortTransaction();
-                    return handleError(res, 400, error.message); // Return specific error message
+                    return handleError(res, 400, err.message);
                 }
             }
-            /* The above code is declaring a variable `coupon` and initializing it with a value of
-            `null`. It then logs the string 'Coup' to the console. However, the code is incomplete
-            and ends abruptly with ' */
 
-            if (coupon) {
-                console.log('Coupon validation checks:', {
-                    isActive: coupon?.isActive,
-                    dateValid: coupon?.startAt <= Date.now() && coupon?.expiresAt > Date.now(),
-                    usageLimit: coupon?.usedCoupons < coupon?.totalCoupons,
-                    minPurchase: subtotal >= coupon?.minPurchase,
-                    maxPurchase: !coupon?.maxPurchase || subtotal <= coupon?.maxPurchase,
-                    eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(user._id)),
-                    eligibleProducts: !coupon.eligibleProducts?.length || orderItems.some(item =>
-                        coupon.eligibleProducts.some(p => p._id.equals(item.product))
-                    ),
-
-                });
-            }
-
-            // Calculate totals
+            // 7) Calculate totals
             const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
             const codFee = paymentMethod === 'COD' ? 50 : 0;
-
             const totalAmount = calculateTotal(
-                subtotal,
-                shippingCost,
-                discount,
-                codFee
+                subtotal, shippingCost, discount, codFee
             );
 
-            // Create order document
+            // 8) Create & save
             const order = new Order({
-                user: user?._id,
+                user: req.user?._id,
                 items: orderItems,
                 subtotal,
                 shippingCost,
@@ -96,34 +112,35 @@ export const orderController = {
                 totalAmount,
                 shippingAddress,
                 paymentMethod,
+                paymentScreenshot: screenshotUrl,
+                paymentStatus: paymentMethod === 'BankTransfer' ? 'Pending' : 'Confirmed',
                 couponUsed: coupon?._id,
                 status: 'Processing'
             });
 
-            // Payment integration
+            // If you still support PayFast:
             if (paymentMethod === 'PayFast') {
                 order.status = 'Pending';
-                    order.paymentResult = generatePayfastPayload(order);
+                order.paymentResult = generatePayfastPayload(order);
             }
 
             await order.save({ session });
 
-            // Update coupon usage
+            // 9) Update coupon usage
             if (coupon) {
-                await updateCouponUsage(coupon, user._id, session);
+                await updateCouponUsage(coupon, req.user._id, session);
             }
 
             await session.commitTransaction();
 
-            // Send notifications
+            // 10) Notify
             await sendStatusNotifications(order, 'Processing');
 
+            return handleResponse(res, 201, 'Order created successfully', order);
 
-            handleResponse(res, 201, 'Order created successfully', order);
-
-        } catch (error) {
+        } catch (err) {
             await session.abortTransaction();
-            handleError(res, 500, error.message);
+            return handleError(res, 500, err.message);
         } finally {
             session.endSession();
         }
@@ -260,8 +277,8 @@ export const orderController = {
         }
     },
 
-    
-    
+
+
     handlePayfastNotification: async (req, res) => {
         try {
             const data = { ...req.body };
@@ -966,3 +983,43 @@ const generateStatusEmail = (order, status) => {
 </html>
   `;
 };
+
+
+
+
+/**
+ * @desc   Admin: confirm or decline a bank transfer
+ * @route  PUT /api/orders/:id/verify-payment
+ * @access Admin
+ */
+export async function verifyPayment(req, res, next) {
+    try {
+        const { paymentStatus } = req.body;   // expected: 'Confirmed' or 'Declined'
+        if (!['Confirmed', 'Declined'].includes(paymentStatus)) {
+            return res.status(400).json({ message: 'Invalid paymentStatus. Must be "Confirmed" or "Declined".' });
+        }
+
+        const order = await Order.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        order.paymentStatus = paymentStatus;
+
+        // if confirmed and it’s a bank transfer, advance order.status
+        if (paymentStatus === 'Confirmed' && order.paymentMethod === 'BankTransfer') {
+            order.status = 'Processing';
+        }
+        // if declined, cancel
+        if (paymentStatus === 'Declined') {
+            order.status = 'Cancelled';
+        }
+
+        const updatedOrder = await order.save();
+        res.json(updatedOrder);
+
+    } catch (err) {
+        // pass any unexpected errors to your errorHandler
+        next(err);
+    }
+}

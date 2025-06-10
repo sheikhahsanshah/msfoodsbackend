@@ -56,4 +56,20 @@ const deleteFromCloudinary = async (publicId) => {
     await cloudinary.uploader.destroy(publicId);
 };
 
+
+const paymentStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: "order_proofs",
+        format: async (req, file) => file.mimetype.split("/")[1],
+        public_id: (req, file) =>
+            `order_${req.user?._id || "guest"}_${Date.now()}`,
+    },
+});
+
+export const uploadPaymentProof = multer({
+    storage: paymentStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+}).single("paymentScreenshot");
+
 export { upload, uploadFields, cloudinary, deleteFromCloudinary };
