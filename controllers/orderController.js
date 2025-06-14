@@ -70,7 +70,7 @@ export const orderController = {
             // 5) Compute shipping
             const settings = await Settings.findOne().session(session) || {};
             const fee = settings.shippingFee ?? 0;
-            const threshold = settings.freeShippingThreshold ?? 3000;
+            const threshold = settings.freeShippingThreshold ?? 2000;
             const shippingCost = subtotal > threshold ? 0 : fee;
 
             // 6) Coupon validation (optional)
@@ -96,7 +96,7 @@ export const orderController = {
 
             // 7) Calculate totals
             const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
-            const codFee = paymentMethod === 'COD' ? 50 : 0;
+            const codFee = paymentMethod === 'COD' ? 100 : 0;
             const totalAmount = calculateTotal(
                 subtotal, shippingCost, discount, codFee
             );
