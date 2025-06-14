@@ -11,7 +11,7 @@ const settingsSchema = new mongoose.Schema(
         freeShippingThreshold: {
             type: Number,
             required: true,
-            default: 3000,    // new!
+            default: 2000,    // new!
         },
     },
     { timestamps: true }
