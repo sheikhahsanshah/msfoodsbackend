@@ -13,6 +13,11 @@ const settingsSchema = new mongoose.Schema(
             required: true,
             default: 2000,    // new!
         },
+        codFee: {
+            type: Number,
+            required: true,
+            default: 100,     // COD fee default
+        },
     },
     { timestamps: true }
 );

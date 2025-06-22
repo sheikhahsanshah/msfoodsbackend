@@ -7,8 +7,9 @@ import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { handleResponse, handleError } from '../utils/responseHandler.js';
 import crypto from 'crypto';
-import transporter from '../config/email.js';
+import resend from '../config/email.js';
 import { sendWhatsAppOrderUpdate } from '../utils/sendWhatsAppMessage.js';
+import { generateOrderConfirmationEmail } from '../utils/emailTemplates.js';
 
 export const orderController = {
     // Create new order with transaction
@@ -32,7 +33,7 @@ export const orderController = {
 
             // 2) Validate shippingAddress
             const required = [
-                'fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'
+                'fullName', 'address', 'city', 'country', 'email', 'phone'
             ];
             const missing = required.filter(f => !shippingAddress[f]);
             if (missing.length) {
@@ -73,7 +74,10 @@ export const orderController = {
             const threshold = settings.freeShippingThreshold ?? 2000;
             const shippingCost = subtotal > threshold ? 0 : fee;
 
-            // 6) Coupon validation (optional)
+            // 6) Compute COD fee
+            const codFee = paymentMethod === 'COD' ? (settings.codFee ?? 100) : 0;
+
+            // 7) Coupon validation (optional)
             let coupon = null;
             if (couponCode) {
                 if (!req.user) {
@@ -94,14 +98,13 @@ export const orderController = {
                 }
             }
 
-            // 7) Calculate totals
-            const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
-            const codFee = paymentMethod === 'COD' ? 100 : 0;
+            // 8) Calculate totals
+            const discount = calculateEligibleDiscount(coupon, orderItems);
             const totalAmount = calculateTotal(
                 subtotal, shippingCost, discount, codFee
             );
 
-            // 8) Create & save
+            // 9) Create & save
             const order = new Order({
                 user: req.user?._id,
                 items: orderItems,
@@ -126,14 +129,14 @@ export const orderController = {
 
             await order.save({ session });
 
-            // 9) Update coupon usage
+            // 10) Update coupon usage
             if (coupon) {
                 await updateCouponUsage(coupon, req.user._id, session);
             }
 
             await session.commitTransaction();
 
-            // 10) Notify
+            // 11) Notify
             await sendStatusNotifications(order, 'Processing');
 
             return handleResponse(res, 201, 'Order created successfully', order);
@@ -160,7 +163,12 @@ export const orderController = {
                 })
                 .populate({
                     path: 'couponUsed',
-                    select: 'code discountType discountValue'
+                    select: 'code discountType discountValue eligibleProducts',
+                    populate: {
+                        path: 'eligibleProducts',
+                        model: 'Product',
+                        select: '_id name'
+                    }
                 });
 
             if (!order) return handleError(res, 404, 'Order not found');
@@ -177,7 +185,17 @@ export const orderController = {
         try {
             const orders = await Order.find({ user: req.user._id })
                 .sort('-createdAt')
-                .populate('items.product', 'name images');
+                .populate('items.product', 'name images')
+                .populate({
+                    path: 'couponUsed',
+                    select: 'code discountType discountValue eligibleProducts',
+                    populate: {
+                        path: 'eligibleProducts',
+                        model: 'Product',
+                        select: '_id name'
+                    }
+                });
+
 
             handleResponse(res, 200, 'Orders retrieved', orders);
         } catch (error) {
@@ -196,7 +214,14 @@ export const orderController = {
                     .limit(limit * 1)
                     .skip((page - 1) * limit)
                     .sort('-createdAt')
-                    .populate('user', 'name email'),
+                    .populate('user', 'name email')
+                    .populate({
+                        path: 'couponUsed',
+                        populate: {
+                            path: 'eligibleProducts',
+                            model: 'Product'
+                        }
+                    }),
                 Order.countDocuments(filter)
             ]);
 
@@ -323,45 +348,49 @@ export const orderController = {
     // Get sales statistics (Admin)
     getSalesStats: async (req, res) => {
         try {
-            const { startDate, endDate, period } = req.query;
-            let matchStage = {};
-
-            if (startDate && endDate) {
-                matchStage.createdAt = {
-                    $gte: new Date(startDate),
-                    $lte: new Date(endDate)
-                };
-            } else if (period) {
-                const dateRange = getDateRange(period);
-                matchStage.createdAt = dateRange;
-            }
+            const { period, startDate, endDate } = req.query;
+            const dateRange = getDateRange(period, startDate, endDate);
 
             const stats = await Order.aggregate([
-                { $match: matchStage },
+                { $match: { createdAt: dateRange, status: { $nin: ['Cancelled', 'Returned'] } } },
                 {
                     $group: {
                         _id: null,
                         totalOrders: { $sum: 1 },
+                        totalRevenue: { $sum: "$totalAmount" },
                         totalSales: { $sum: "$subtotal" },
                         totalShipping: { $sum: "$shippingCost" },
                         totalDiscount: { $sum: "$discount" },
-                        totalRevenue: { $sum: "$totalAmount" },
-                        couponsUsed: {
-                            $sum: {
-                                $cond: [{ $ifNull: ["$couponUsed", false] }, 1, 0]
-                            }
-                        }
+                        totalCodFee: { $sum: "$codFee" },
+                        couponsUsed: { $sum: { $cond: [{ $ne: ["$couponUsed", null] }, 1, 0] } }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        totalOrders: 1,
+                        totalRevenue: 1,
+                        totalSales: 1,
+                        totalShipping: 1,
+                        totalDiscount: 1,
+                        totalCodFee: 1,
+                        couponsUsed: 1,
+                        // Profit is revenue minus the cost of goods. Since we don't track COGS,
+                        // we can't calculate it yet. Setting to 0 as a placeholder.
+                        totalProfit: { $literal: 0 }
                     }
                 }
             ]);
 
             const result = stats[0] || {
                 totalOrders: 0,
+                totalRevenue: 0,
                 totalSales: 0,
                 totalShipping: 0,
                 totalDiscount: 0,
-                totalRevenue: 0,
-                couponsUsed: 0
+                totalCodFee: 0,
+                couponsUsed: 0,
+                totalProfit: 0
             };
 
             handleResponse(res, 200, 'Sales stats retrieved', result);
@@ -417,6 +446,7 @@ const processOrderItems = async (items, session) => {
 };
 
 const validateCoupon = async (code, userId, subtotal, orderItems, session) => {
+    console.log("validateCoupon", code, userId, subtotal, orderItems);
     const coupon = await Coupon.findOne({ code: code.toUpperCase() })
         .session(session)
         .populate('eligibleUsers eligibleProducts');
@@ -552,12 +582,22 @@ const sendOrderNotifications = async (order, user) => {
     try {
         // Send email notification
         if (contactInfo.email) {
-            await transporter.sendMail({
-                from: process.env.EMAIL_FROM,
-                to: contactInfo.email,
-                subject: 'Order Confirmation',
-                html: generateOrderEmail(order)
-            });
+            if (!resend) {
+                console.warn('⚠️  Order email not sent: Resend not initialized');
+            } else {
+                const { data, error } = await resend.emails.send({
+                    from: 'onboarding@resend.dev',
+                    to: [contactInfo.email],
+                    subject: 'Order Confirmation - MS Foods',
+                    html: generateOrderConfirmationEmail(order)
+                });
+
+                if (error) {
+                    console.error('❌ Order email error:', error);
+                } else {
+                    console.log('✅ Order email sent successfully:', data);
+                }
+            }
         }
 
         // Send WhatsApp notification
@@ -640,12 +680,22 @@ const sendStatusNotifications = async (order, status) => {
             }
 
             if (contactInfo.email) {
-                await transporter.sendMail({
-                    from: process.env.EMAIL_FROM,
-                    to: contactInfo.email,
-                    subject: `${status} Update - Order #${order._id}`,
-                    html: generateStatusEmail(order, status)
-                });
+                if (!resend) {
+                    console.warn('⚠️  Status email not sent: Resend not initialized');
+                } else {
+                    const { data, error } = await resend.emails.send({
+                        from: 'onboarding@resend.dev',
+                        to: [contactInfo.email],
+                        subject: `${status} Update - Order #${order._id}`,
+                        html: generateStatusEmail(order, status)
+                    });
+
+                    if (error) {
+                        console.error('❌ Status email error:', error);
+                    } else {
+                        console.log('✅ Status email sent successfully:', data);
+                    }
+                }
             }
         }
     } catch (error) {
@@ -722,7 +772,7 @@ const updateOrderFromPayment = (order, data) => {
     }
 };
 
-const getDateRange = (period) => {
+const getDateRange = (period, startDate, endDate) => {
     const now = new Date();
     let start;
 
@@ -740,7 +790,14 @@ const getDateRange = (period) => {
             start = new Date(0);
     }
 
-    return { $gte: start, $lte: new Date() };
+    if (startDate && endDate) {
+        start = new Date(startDate);
+        endDate = new Date(endDate);
+    } else {
+        endDate = new Date();
+    }
+
+    return { $gte: start, $lte: endDate };
 };
 
 const generateOrderEmail = (order) => `
@@ -969,7 +1026,7 @@ const generateStatusEmail = (order, status) => {
                 <h3>Shipping Address</h3>
                 <p>${order.shippingAddress.fullName}</p>
                 <p>${order.shippingAddress.address}</p>
-                <p>${order.shippingAddress.city}, ${order.shippingAddress.postalCode}</p>
+                <p>${order.shippingAddress.city}${order.shippingAddress.postalCode ? `, ${order.shippingAddress.postalCode}` : ''}</p>
                 <p>${order.shippingAddress.country}</p>
             </div>
         </div>
@@ -984,8 +1041,51 @@ const generateStatusEmail = (order, status) => {
   `;
 };
 
+const calculateEligibleDiscount = (coupon, orderItems) => {
+    if (!coupon) return 0;
 
+    let eligibleItems = [];
+    let eligibleSubtotal = 0;
 
+    if (coupon.eligibleProducts && coupon.eligibleProducts.length > 0) {
+        // Filter items that are eligible for this coupon
+        eligibleItems = orderItems.filter(item =>
+            coupon.eligibleProducts.some(p => p._id.equals(item.product))
+        );
+
+        // Calculate subtotal for eligible products only
+        eligibleSubtotal = eligibleItems.reduce((total, item) => {
+            const itemPrice = item.priceOption?.price || 0;
+            return total + (itemPrice * item.quantity);
+        }, 0);
+    } else {
+        // If no eligible products specified, apply to entire order
+        eligibleItems = orderItems;
+        eligibleSubtotal = orderItems.reduce((total, item) => {
+            const itemPrice = item.priceOption?.price || 0;
+            return total + (itemPrice * item.quantity);
+        }, 0);
+    }
+
+    // Apply discount to eligible subtotal only
+    let discount = 0;
+    if (coupon.discountType === 'percentage') {
+        discount = Math.min((eligibleSubtotal * coupon.discountValue) / 100, eligibleSubtotal);
+    } else {
+        discount = Math.min(coupon.discountValue, eligibleSubtotal);
+    }
+
+    console.log('Order discount calculation:', {
+        couponCode: coupon.code,
+        eligibleItems: eligibleItems.length,
+        eligibleSubtotal,
+        discount,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue
+    });
+
+    return discount;
+};
 
 /**
  * @desc   Admin: confirm or decline a bank transfer
@@ -1006,7 +1106,7 @@ export async function verifyPayment(req, res, next) {
 
         order.paymentStatus = paymentStatus;
 
-        // if confirmed and it’s a bank transfer, advance order.status
+        // if confirmed and it's a bank transfer, advance order.status
         if (paymentStatus === 'Confirmed' && order.paymentMethod === 'BankTransfer') {
             order.status = 'Processing';
         }

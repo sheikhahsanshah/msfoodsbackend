@@ -43,6 +43,10 @@ const orderSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    codFee: {
+        type: Number,
+        default: 0
+    },
     totalAmount: {
         type: Number,
         required: true
@@ -65,7 +69,7 @@ const orderSchema = new mongoose.Schema({
         enum: ['Pending', 'Confirmed', 'Declined'],
         default: 'Pending'
     },
-    paymentScreenshot: String,  // URL/path to the user’s proof
+    paymentScreenshot: String,  // URL/path to the user's proof
     paymentResult: {
         id: String,
         status: String,

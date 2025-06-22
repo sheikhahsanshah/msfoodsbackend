@@ -27,6 +27,7 @@
         "multer-storage-cloudinary": "^4.0.0",
         "node-fetch": "^3.3.2",
         "nodemailer": "^6.10.0",
+        "resend": "^4.6.0",
         "stripe": "^12.18.0",
         "waterbottle-store-backend": "file:"
     },
