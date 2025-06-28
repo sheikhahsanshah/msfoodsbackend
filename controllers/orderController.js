@@ -459,6 +459,21 @@ const validateCoupon = async (code, userId, subtotal, orderItems, session) => {
     const userUsage = coupon.usedBy.find(u => u.userId.equals(userId));
     const timesUsed = userUsage?.timesUsed || 0;
 
+    // Calculate eligible subtotal for min/max validation
+    let eligibleSubtotal = subtotal;
+    if (coupon.eligibleProducts && coupon.eligibleProducts.length > 0) {
+        // Filter items that are eligible for this coupon
+        const eligibleItems = orderItems.filter(item =>
+            coupon.eligibleProducts.some(p => p._id.equals(item.product))
+        );
+
+        // Calculate subtotal for eligible products only
+        eligibleSubtotal = eligibleItems.reduce((total, item) => {
+            const itemPrice = item.priceOption?.price || 0;
+            return total + (itemPrice * item.quantity);
+        }, 0);
+    }
+
     // Validation checks with specific error messages
     const validations = [
         {
@@ -478,13 +493,13 @@ const validateCoupon = async (code, userId, subtotal, orderItems, session) => {
             message: 'Coupon usage limit reached'
         },
         {
-            check: subtotal >= coupon.minPurchase,
-            message: `Order subtotal must be at least Rs${coupon.minPurchase}`
+            check: eligibleSubtotal >= coupon.minPurchase,
+            message: `Eligible products subtotal must be at least Rs${coupon.minPurchase}`
         },
         {
-            check: !coupon.maxPurchase || subtotal <= coupon.maxPurchase,
+            check: !coupon.maxPurchase || eligibleSubtotal <= coupon.maxPurchase,
             message: coupon.maxPurchase ?
-                `Order subtotal must be less than Rs${coupon.maxPurchase}` :
+                `Eligible products subtotal must be less than Rs${coupon.maxPurchase}` :
                 'Coupon not valid for this order amount'
         },
         {
@@ -512,15 +527,17 @@ const validateCoupon = async (code, userId, subtotal, orderItems, session) => {
         validDates: coupon.startAt <= Date.now() && coupon.expiresAt > Date.now(),
         totalUses: `${coupon.usedCoupons}/${coupon.totalCoupons}`,
         userUses: `${timesUsed}/${coupon.maxUsesPerUser}`,
-        minPurchase: `${subtotal >= coupon.minPurchase} (${subtotal} >= ${coupon.minPurchase})`,
+        minPurchase: `${eligibleSubtotal >= coupon.minPurchase} (${eligibleSubtotal} >= ${coupon.minPurchase})`,
         maxPurchase: coupon.maxPurchase ?
-            `${subtotal <= coupon.maxPurchase} (${subtotal} <= ${coupon.maxPurchase})` : 'No max',
+            `${eligibleSubtotal <= coupon.maxPurchase} (${eligibleSubtotal} <= ${coupon.maxPurchase})` : 'No max',
         eligibleUser: !coupon.eligibleUsers?.length ||
             coupon.eligibleUsers.some(u => u._id.equals(userId)),
         eligibleProducts: !coupon.eligibleProducts?.length ||
             orderItems.some(item =>
                 coupon.eligibleProducts.some(p => p._id.equals(item.product))
-            )
+            ),
+        eligibleSubtotal,
+        totalSubtotal: subtotal
     });
 
     // Find the first failed validation

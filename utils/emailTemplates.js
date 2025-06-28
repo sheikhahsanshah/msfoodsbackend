@@ -140,8 +140,23 @@ export const generateContactFormEmail = (contactData) => {
 };
 
 export const generateMarketingEmail = (subject, content, images = []) => {
+    // Handle images as objects with url and alt properties
     const imageHtml = images.length > 0 ?
-        images.map(img => `<img src="${img}" alt="MS Foods" style="max-width: 100%; height: auto; margin: 10px 0; border-radius: 8px;">`).join('') : '';
+        images.map(img => {
+            const imgUrl = typeof img === 'string' ? img : img.url;
+            const imgAlt = typeof img === 'string' ? 'MS Foods' : (img.alt || 'MS Foods');
+            return `<img src="${imgUrl}" alt="${imgAlt}" style="max-width: 100%; height: auto; margin: 10px 0; border-radius: 8px;">`;
+        }).join('') : '';
+
+    // Process content to handle [IMAGE] placeholders
+    let processedContent = content;
+    if (images.length > 0 && content.includes('[IMAGE]')) {
+        // Replace [IMAGE] placeholders with images
+        processedContent = content.replace(/\[IMAGE\]/g, imageHtml);
+    } else if (images.length > 0) {
+        // If no [IMAGE] placeholder, append images at the end
+        processedContent = content + imageHtml;
+    }
 
     return `
         <!DOCTYPE html>
@@ -156,8 +171,7 @@ export const generateMarketingEmail = (subject, content, images = []) => {
                 <h1 style="color: #2c3e50; text-align: center; margin-bottom: 30px;">MS Foods</h1>
                 
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    ${content}
-                    ${imageHtml}
+                    ${processedContent}
                 </div>
                 
                 <div style="text-align: center; margin: 30px 0;">

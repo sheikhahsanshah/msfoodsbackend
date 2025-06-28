@@ -2,7 +2,7 @@ import User from '../../models/User.js';
 import { sendEmail } from '../../utils/sendEmail.js';
 import { generateMarketingEmail } from '../../utils/emailTemplates.js';
 
-const BATCH_SIZE = 5; // Smaller batch size for emails to avoid rate limits
+const BATCH_SIZE = 2; // Reduced batch size to match rate limit (2 requests per second)
 
 export const sendMarketingEmail = async (req, res) => {
     try {
@@ -71,82 +71,58 @@ export const sendMarketingEmail = async (req, res) => {
         let successCount = 0;
         let failureCount = 0;
 
-        // Process users in batches
-        for (let i = 0; i < users.length; i += BATCH_SIZE) {
-            const batch = users.slice(i, i + BATCH_SIZE);
+        // Process users sequentially to avoid rate limits
+        for (let i = 0; i < users.length; i++) {
+            const user = users[i];
 
-            const batchResults = await Promise.all(
-                batch.map(async (user) => {
-                    try {
-                        // Build HTML content with images if included
-                        let htmlContent = message;
+            try {
+                // Build HTML content with images if included
+                let htmlContent = message;
 
-                        if (includeImages && images && images.length > 0) {
-                            console.log(`🖼️ Processing images for ${user.email}:`, images);
+                // Add unsubscribe link
+                const unsubscribeLink = `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(user.email)}&token=${user._id}`;
+                htmlContent += `
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+                        <p>You received this email because you're subscribed to our marketing communications.</p>
+                        <p><a href="${unsubscribeLink}" style="color: #666;">Unsubscribe</a></p>
+                    </div>
+                `;
 
-                            // Add images to the HTML content
-                            const imageHtml = images.map(img =>
-                                `<img src="${img.url}" alt="${img.alt || 'Marketing Image'}" style="max-width: 100%; height: auto; margin: 10px 0; display: block;" />`
-                            ).join('');
+                console.log(`📧 Sending email to ${user.email} with HTML length: ${htmlContent.length}`);
+                if (includeImages && images && images.length > 0) {
+                    console.log(`🖼️ Processing ${images.length} images for ${user.email}`);
+                }
 
-                            // Insert images at specified positions or append to end
-                            if (htmlContent.includes('[IMAGE]')) {
-                                // Replace [IMAGE] placeholders with images
-                                htmlContent = htmlContent.replace(/\[IMAGE\]/g, imageHtml);
-                                console.log(`📍 Images inserted at [IMAGE] placeholders for ${user.email}`);
-                            } else {
-                                // If no [IMAGE] placeholder, append images at the end
-                                htmlContent += imageHtml;
-                                console.log(`📎 Images appended to end for ${user.email}`);
-                            }
-                        } else {
-                            console.log(`❌ No images to process for ${user.email} (includeImages: ${includeImages}, imagesCount: ${images?.length})`);
-                        }
+                await sendEmail({
+                    email: user.email,
+                    subject: subject,
+                    html: generateMarketingEmail(subject, htmlContent, includeImages ? images : [])
+                });
 
-                        // Add unsubscribe link
-                        const unsubscribeLink = `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(user.email)}&token=${user._id}`;
-                        htmlContent += `
-                            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                                <p>You received this email because you're subscribed to our marketing communications.</p>
-                                <p><a href="${unsubscribeLink}" style="color: #666;">Unsubscribe</a></p>
-                            </div>
-                        `;
+                successCount++;
+                allResults.push({
+                    userId: user._id,
+                    email: user.email,
+                    status: 'success'
+                });
 
-                        console.log(`📧 Sending email to ${user.email} with HTML length: ${htmlContent.length}`);
-                        if (includeImages && images && images.length > 0) {
-                            console.log(`🖼️ Final HTML contains images: ${htmlContent.includes('<img')}`);
-                        }
+                console.log(`✅ Email sent successfully to ${user.email}`);
 
-                        await sendEmail({
-                            email: user.email,
-                            subject: subject,
-                            html: generateMarketingEmail(subject, htmlContent, images)
-                        });
+            } catch (error) {
+                console.error(`❌ Failed to send email to ${user.email}:`, error);
+                failureCount++;
+                allResults.push({
+                    userId: user._id,
+                    email: user.email,
+                    status: 'failed',
+                    error: error.message
+                });
+            }
 
-                        successCount++;
-                        return {
-                            userId: user._id,
-                            email: user.email,
-                            status: 'success'
-                        };
-                    } catch (error) {
-                        console.error(`Failed to send email to ${user.email}:`, error);
-                        failureCount++;
-                        return {
-                            userId: user._id,
-                            email: user.email,
-                            status: 'failed',
-                            error: error.message
-                        };
-                    }
-                })
-            );
-
-            allResults = [...allResults, ...batchResults];
-
-            // Add delay between batches to avoid rate limits
-            if (i + BATCH_SIZE < users.length) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            // Add delay between emails to respect rate limits (2 requests per second = 500ms between requests)
+            if (i < users.length - 1) {
+                console.log(`⏳ Waiting 500ms before next email...`);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
 

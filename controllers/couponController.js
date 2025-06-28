@@ -102,14 +102,6 @@ export const validateCoupon = async (req, res) => {
             return handleError(res, 400, 'Coupon has expired');
         }
 
-        if (cartTotal < coupon.minPurchase) {
-            return handleError(res, 400, `Minimum purchase of Rs${coupon.minPurchase} required`);
-        }
-
-        if (coupon.maxPurchase && cartTotal > coupon.maxPurchase) {
-            return handleError(res, 400, `Maximum purchase allowed is Rs${coupon.maxPurchase}`);
-        }
-
         if (coupon.usedCoupons >= coupon.totalCoupons) {
             return handleError(res, 400, 'Coupon usage limit reached');
         }
@@ -154,6 +146,15 @@ export const validateCoupon = async (req, res) => {
             eligibleSubtotal = cartTotal;
         }
 
+        // Validate min/max purchase against eligible subtotal
+        if (eligibleSubtotal < coupon.minPurchase) {
+            return handleError(res, 400, `Minimum purchase of Rs${coupon.minPurchase} required for eligible products`);
+        }
+
+        if (coupon.maxPurchase && eligibleSubtotal > coupon.maxPurchase) {
+            return handleError(res, 400, `Maximum purchase allowed is Rs${coupon.maxPurchase} for eligible products`);
+        }
+
         const userUsage = coupon.usedBy.find(u => u.userId.toString() === userId.toString());
         if (userUsage && userUsage.timesUsed >= (coupon.maxUsesPerUser || 1)) {
             return handleError(res, 400, 'Coupon usage limit reached for this user');
@@ -173,7 +174,11 @@ export const validateCoupon = async (req, res) => {
             cartTotal,
             discount,
             discountType: coupon.discountType,
-            discountValue: coupon.discountValue
+            discountValue: coupon.discountValue,
+            minPurchase: coupon.minPurchase,
+            maxPurchase: coupon.maxPurchase,
+            minPurchaseValid: eligibleSubtotal >= coupon.minPurchase,
+            maxPurchaseValid: !coupon.maxPurchase || eligibleSubtotal <= coupon.maxPurchase
         });
 
         handleResponse(res, 200, 'Coupon is valid', {
