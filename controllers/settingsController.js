@@ -19,7 +19,7 @@ export const createSettings = async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 };
- 
+
 export const getStats = async (req, res) => {
     try {
         const totalProducts = await Product.countDocuments();
@@ -62,13 +62,29 @@ export const getSettings = async (req, res) => {
 // UPDATE settings (Admin only)
 export const updateSettings = async (req, res) => {
     try {
-        const { shippingFee } = req.body;
+        const { shippingFee, freeShippingThreshold, codFee } = req.body;
         let settings = await Settings.findOne();
+
         if (!settings) {
-            settings = new Settings({ shippingFee });
+            // If no settings exist, create them
+            settings = new Settings({
+                shippingFee: shippingFee ?? 0,
+                freeShippingThreshold: freeShippingThreshold ?? 2000,
+                codFee: codFee ?? 100
+            });
         } else {
-            settings.shippingFee = shippingFee;
+            // Update fields if they are provided in the request
+            if (shippingFee !== undefined) {
+                settings.shippingFee = shippingFee;
+            }
+            if (freeShippingThreshold !== undefined) {
+                settings.freeShippingThreshold = freeShippingThreshold;
+            }
+            if (codFee !== undefined) {
+                settings.codFee = codFee;
+            }
         }
+
         await settings.save();
         res.json({ message: 'Settings updated successfully', settings });
     } catch (error) {

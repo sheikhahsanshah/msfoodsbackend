@@ -82,11 +82,13 @@ export const getAllCoupons = async (req, res) => {
 // @access  Private
 export const validateCoupon = async (req, res) => {
     try {
-        const { code, cartTotal } = req.body;
+        const { code, cartTotal, items } = req.body;
         const userId = req.user._id;
         const currentTime = new Date();
 
-        const coupon = await Coupon.findOne({ code: code.toUpperCase() }).lean();
+        const coupon = await Coupon.findOne({ code: code.toUpperCase() })
+            .populate('eligibleUsers eligibleProducts')
+            .lean();
 
         if (!coupon || !coupon.isActive) {
             return handleError(res, 404, 'Invalid coupon code');
@@ -100,25 +102,57 @@ export const validateCoupon = async (req, res) => {
             return handleError(res, 400, 'Coupon has expired');
         }
 
-        if (cartTotal < coupon.minPurchase) {
-            return handleError(res, 400, `Minimum purchase of $${coupon.minPurchase} required`);
-        }
-
-        if (coupon.maxPurchase && cartTotal > coupon.maxPurchase) {
-            return handleError(res, 400, `Maximum purchase allowed is $${coupon.maxPurchase}`);
-        }
-
         if (coupon.usedCoupons >= coupon.totalCoupons) {
             return handleError(res, 400, 'Coupon usage limit reached');
         }
-        // Add eligibility check (NEW CODE)
-        if (coupon.eligibleUsers.length > 0) {
+
+        if (coupon.eligibleUsers && coupon.eligibleUsers.length > 0) {
             const isEligible = coupon.eligibleUsers.some(userIdObj =>
-                userIdObj.equals(userId)
+                userIdObj._id.toString() === userId.toString()
             );
             if (!isEligible) {
                 return handleError(res, 403, 'This coupon is not available for your account');
             }
+        }
+
+        // Check product eligibility and calculate eligible subtotal
+        let eligibleItems = [];
+        let eligibleSubtotal = 0;
+
+        if (coupon.eligibleProducts && coupon.eligibleProducts.length > 0) {
+            // Specific products coupon
+            if (!items || items.length === 0) {
+                return handleError(res, 400, 'No items in cart to validate against eligible products');
+            }
+
+            // Filter items that are eligible for this coupon
+            eligibleItems = items.filter(item =>
+                coupon.eligibleProducts.some(p => p._id.toString() === item.productId.toString())
+            );
+
+            if (eligibleItems.length === 0) {
+                return handleError(res, 400, 'Coupon not valid for these products');
+            }
+
+            // Calculate subtotal for eligible products only
+            eligibleSubtotal = eligibleItems.reduce((total, item) => {
+                const itemPrice = item.price || 0;
+                return total + (itemPrice * item.quantity);
+            }, 0);
+
+        } else {
+            // All products coupon
+            eligibleItems = items;
+            eligibleSubtotal = cartTotal;
+        }
+
+        // Validate min/max purchase against eligible subtotal
+        if (eligibleSubtotal < coupon.minPurchase) {
+            return handleError(res, 400, `Minimum purchase of Rs${coupon.minPurchase} required for eligible products`);
+        }
+
+        if (coupon.maxPurchase && eligibleSubtotal > coupon.maxPurchase) {
+            return handleError(res, 400, `Maximum purchase allowed is Rs${coupon.maxPurchase} for eligible products`);
         }
 
         const userUsage = coupon.usedBy.find(u => u.userId.toString() === userId.toString());
@@ -126,18 +160,39 @@ export const validateCoupon = async (req, res) => {
             return handleError(res, 400, 'Coupon usage limit reached for this user');
         }
 
+        // Calculate discount based on eligible subtotal only
         let discount = coupon.discountType === 'percentage'
-            ? cartTotal * (coupon.discountValue / 100)
+            ? eligibleSubtotal * (coupon.discountValue / 100)
             : coupon.discountValue;
 
-        discount = Math.min(discount, cartTotal);
+        discount = Math.min(discount, eligibleSubtotal);
 
+        console.log('Coupon validation details:', {
+            couponCode: coupon.code,
+            eligibleItems: eligibleItems.length,
+            eligibleSubtotal,
+            cartTotal,
+            discount,
+            discountType: coupon.discountType,
+            discountValue: coupon.discountValue,
+            minPurchase: coupon.minPurchase,
+            maxPurchase: coupon.maxPurchase,
+            minPurchaseValid: eligibleSubtotal >= coupon.minPurchase,
+            maxPurchaseValid: !coupon.maxPurchase || eligibleSubtotal <= coupon.maxPurchase
+        });
 
         handleResponse(res, 200, 'Coupon is valid', {
             valid: true,
             discount: Number(discount.toFixed(2)),
             discountType: coupon.discountType,
-            code: coupon.code
+            code: coupon.code,
+            eligibleItems: eligibleItems.map(item => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                price: item.price,
+                name: item.name
+            })),
+            eligibleSubtotal: Number(eligibleSubtotal.toFixed(2))
         });
 
     } catch (error) {
@@ -152,7 +207,7 @@ export const updateCoupon = async (req, res) => {
     try {
         const { code } = req.params;
         const updates = req.body;
-        
+
         const coupon = await Coupon.findOne({ code: code.toUpperCase() });
         if (!coupon) {
             return handleError(res, 404, 'Coupon not found');
@@ -167,7 +222,7 @@ export const updateCoupon = async (req, res) => {
         }
 
         const allowedUpdates = [
-            'discountValue', 'minPurchase', 'maxPurchase', 'maxUses','maxUsesPerUser',
+            'discountValue', 'minPurchase', 'maxPurchase', 'maxUses', 'maxUsesPerUser',
             'singleUse', 'totalCoupons', 'startAt', 'expiresAt', 'isActive', 'eligibleUsers', 'eligibleProducts'
         ];
 
@@ -181,13 +236,13 @@ export const updateCoupon = async (req, res) => {
                 }
             }
         });
-        
+
         console.log("coupons before save : ", coupon)
-        
+
 
         await coupon.save();
         const updatedCoupons = await Coupon.find().sort({ createdAt: -1 });
-        
+
 
         handleResponse(res, 200, 'Coupon updated successfully', updatedCoupons);
 

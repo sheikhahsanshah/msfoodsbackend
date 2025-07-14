@@ -1,11 +1,11 @@
 import session from 'express-session';
-import transporter from './config/email.js';
+import resend from './config/email.js';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import connectDB from './config/db.js'; 
+import connectDB from './config/db.js';
 import { errorHandler } from './middlewares/error.js';
 import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -20,6 +20,7 @@ import adminUserRoutes from './routes/adminUserRoutes.js';;
 import { sendContactEmail } from './controllers/contactController.js';
 import whatsappWebhookRoutes from './webhooks/routes/whatsappWebhookRoutes.js';
 import marketingRoutes from './webhooks/routes/marketingRoutes.js';
+import emailMarketingRoutes from './webhooks/routes/emailMarketingRoutes.js';
 import adRoutes from './routes/adRoutes.js';
 import payfastRouter from './routes/payfast.js'
 import paymentMethodRoutes from './routes/paymentMethodRoutes.js';
@@ -100,11 +101,12 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/settings', settingRoutes); 
+app.use('/api/settings', settingRoutes);
 app.use('/api/adminUser', adminUserRoutes);
 app.use('/api/hero', heroRoutes);
 app.use('/api/webhook', whatsappWebhookRoutes);
 app.use('/api/webhook/marketing', marketingRoutes);
+app.use('/api/webhook/email-marketing', emailMarketingRoutes);
 app.use('/api/ad/', adRoutes);
 app.post('/api/webhook/whatsapp', (req, res) => {
     console.log('Webhook received:', req.body);
@@ -125,14 +127,25 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/test-email', async (req, res) => {
+    if (!resend) {
+        return res.status(500).send('❌ Email service not available - RESEND_API_KEY not set');
+    }
+
     try {
-        await transporter.sendMail({
-            from: process.env.EMAIL_FROM,
-            to: 'alyhusnaiin@gmail.com',
+        const { data, error } = await resend.emails.send({
+            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+            to: ['alyhusnaiin@gmail.com'],
             subject: 'Test Email',
-            text: 'This is a working test email',
+            html: '<p>This is a working test email from Resend</p>',
         });
-        res.send('✅ Test email sent successfully');
+
+        if (error) {
+            console.error('❌ Email error:', error);
+            res.status(500).send('❌ Email sending failed');
+        } else {
+            console.log('✅ Test email sent successfully:', data);
+            res.send('✅ Test email sent successfully');
+        }
     } catch (error) {
         console.error('❌ Email error:', error);
         res.status(500).send('❌ Email sending failed');

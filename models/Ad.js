@@ -8,7 +8,7 @@ const AdSchema = new mongoose.Schema({
     },
     endDate: {
         type: Date,
-        default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days from now
+        default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default to 30 days from now
     },
     mobileImage: String,
     desktopImage: String,
