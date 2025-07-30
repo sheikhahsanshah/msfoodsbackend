@@ -3,7 +3,7 @@ export default class APIFeatures {
         this.query = query;
         this.queryString = queryString;
         this.page = 1;
-        this.limit = 20;
+        this.limit = 30;
     }
 
     filter() {
@@ -49,7 +49,7 @@ export default class APIFeatures {
 
     paginate() {
         this.page = parseInt(this.queryString.page, 10) || 1;
-        this.limit = parseInt(this.queryString.limit, 10) || 20;
+        this.limit = parseInt(this.queryString.limit, 10) || 30;
         const skip = (this.page - 1) * this.limit;
 
         this.query = this.query.skip(skip).limit(this.limit);
