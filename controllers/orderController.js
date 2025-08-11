@@ -382,6 +382,39 @@ export const orderController = {
                 }
             ]);
 
+            // Calculate sale discounts from order items
+            const saleDiscountsResult = await Order.aggregate([
+                { $match: { createdAt: dateRange, status: { $nin: ['Cancelled', 'Returned'] } } },
+                { $unwind: "$items" },
+                {
+                    $group: {
+                        _id: null,
+                        totalSaleDiscounts: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $ne: ["$items.priceOption.originalPrice", null] },
+                                            { $gt: ["$items.priceOption.originalPrice", "$items.priceOption.price"] }
+                                        ]
+                                    },
+                                    {
+                                        $multiply: [
+                                            { $subtract: ["$items.priceOption.originalPrice", "$items.priceOption.price"] },
+                                            "$items.quantity"
+                                        ]
+                                    },
+                                    0
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]);
+
+            const totalSaleDiscounts = saleDiscountsResult.length > 0 ? saleDiscountsResult[0].totalSaleDiscounts : 0;
+            const totalDiscounts = (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
+
             const result = stats[0] || {
                 totalOrders: 0,
                 totalRevenue: 0,
@@ -392,6 +425,11 @@ export const orderController = {
                 couponsUsed: 0,
                 totalProfit: 0
             };
+
+            // Update the result with total discounts including sale discounts
+            result.totalDiscount = totalDiscounts;
+            result.totalSaleDiscounts = totalSaleDiscounts;
+            result.totalCouponDiscounts = stats[0]?.totalDiscount || 0;
 
             handleResponse(res, 200, 'Sales stats retrieved', result);
         } catch (error) {
@@ -424,6 +462,27 @@ const processOrderItems = async (items, session) => {
         product.stock -= requiredStock;
         stockUpdates.push(product.save({ session }));
 
+        // Calculate the final price considering all sale types
+        let finalPrice = priceOption.price;
+        let salePrice = null;
+        let originalPrice = priceOption.price;
+        let globalSalePercentage = null;
+
+        // Priority 1: Individual sale price (if exists)
+        if (priceOption.salePrice && priceOption.salePrice < priceOption.price) {
+            finalPrice = priceOption.salePrice;
+            salePrice = priceOption.salePrice;
+        }
+        // Priority 2: Global sale percentage (if no individual sale price)
+        else if (product.sale && product.sale > 0 && product.sale <= 100) {
+            const calculatedSalePrice = Math.round(priceOption.price * (1 - product.sale / 100));
+            // Only apply if it's a meaningful discount (at least 1%)
+            if (calculatedSalePrice < priceOption.price && (priceOption.price - calculatedSalePrice) / priceOption.price >= 0.01) {
+                finalPrice = calculatedSalePrice;
+                globalSalePercentage = product.sale;
+            }
+        }
+
         // Build order item
         orderItems.push({
             product: product._id,
@@ -431,14 +490,16 @@ const processOrderItems = async (items, session) => {
             priceOption: {
                 type: priceOption.type,
                 weight: priceOption.weight,
-                price: priceOption.salePrice || priceOption.price,
-                salePrice: priceOption.salePrice
+                price: finalPrice, // This is the final price customer pays
+                salePrice: salePrice,
+                originalPrice: originalPrice,
+                globalSalePercentage: globalSalePercentage
             },
             quantity: item.quantity,
             image: product.images[0]?.url
         });
 
-        subtotal += (priceOption.salePrice || priceOption.price) * item.quantity;
+        subtotal += finalPrice * item.quantity;
     }
 
     await Promise.all(stockUpdates);

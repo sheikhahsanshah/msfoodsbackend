@@ -7,7 +7,8 @@ import {
     createProduct,
     updateProduct,
     deleteProduct,
-    getProductsByCategories
+    getProductsByCategories,
+    getProductsByMultipleCategories
 } from '../controllers/productController.js';
 import { protect, admin } from '../middlewares/auth.js';
 import { upload } from '../config/cloudinary.js';
@@ -16,7 +17,8 @@ const router = express.Router();
 
 router.get('/', getAllProducts);
 router.get('/recent', getRecentProducts);
-router.get('/by-categories', getProductsByCategories);
+router.get('/categories/:categoryId', getProductsByCategories);
+router.get('/by-categories', getProductsByMultipleCategories);
 
 router.get('/search', searchProducts);
 router.get('/:id', getProductById);

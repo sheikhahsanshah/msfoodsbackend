@@ -14,19 +14,39 @@ export const getAllProducts = async (req, res) => {
             .limitFields()
             .paginate();
 
-        const products = await features.query;
+        const products = await features.query.lean(); // Use lean() for better performance
         const total = await Product.countDocuments(features.filterQuery);
 
+        // Safely process products with calculated sale prices
+        const processedProducts = products.map(product => {
+            try {
+                // Create a Product instance to access virtual fields
+                const productInstance = new Product(product);
+
+                return {
+                    ...product,
+                    calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                    hasActiveSales: productInstance.hasActiveSales,
+                    lowestPrice: productInstance.lowestPrice
+                };
+            } catch (error) {
+                console.error(`⚠️ CRITICAL: Error processing product ${product._id}:`, error);
+                // Return original product data on error to prevent financial loss
+                return product;
+            }
+        });
+
         handleResponse(res, 200, 'Products retrieved successfully', {
-            products,
+            products: processedProducts,
             total,
-            results: products.length,
+            results: processedProducts.length,
             currentPage: features.page,
             totalPages: Math.ceil(total / features.limit)
         });
 
     } catch (error) {
-        handleError(res, 500, error.message);
+        console.error('⚠️ CRITICAL: Error in getAllProducts:', error);
+        handleError(res, 500, 'Error retrieving products');
     }
 };
 
@@ -35,30 +55,160 @@ export const getAllProducts = async (req, res) => {
 // @access  Public
 export const getRecentProducts = async (req, res) => {
     try {
-        const products = await Product.find().sort({ createdAt: -1 }).limit(6);
-        handleResponse(res, 200, 'Recent products retrieved successfully', products);
+        const products = await Product.find().sort({ createdAt: -1 }).limit(6).lean();
+
+        // Safely process products with calculated sale prices
+        const processedProducts = products.map(product => {
+            try {
+                // Create a Product instance to access virtual fields
+                const productInstance = new Product(product);
+
+                return {
+                    ...product,
+                    calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                    hasActiveSales: productInstance.hasActiveSales,
+                    lowestPrice: productInstance.lowestPrice
+                };
+            } catch (error) {
+                console.error(`⚠️ CRITICAL: Error processing recent product ${product._id}:`, error);
+                // Return original product data on error to prevent financial loss
+                return product;
+            }
+        });
+
+        handleResponse(res, 200, 'Recent products retrieved successfully', processedProducts);
     } catch (error) {
-        handleError(res, 500, error.message);
+        console.error('⚠️ CRITICAL: Error in getRecentProducts:', error);
+        handleError(res, 500, 'Error retrieving recent products');
     }
 };
 
 // @desc    Get products by categories
-// @route   GET /api/products/by-categories
+// @route   GET /api/products/categories/:categoryId
 // @access  Public
 export const getProductsByCategories = async (req, res) => {
     try {
-        const { categories } = req.query;
-        if (!categories) return handleError(res, 400, 'Categories query required');
+        const { categoryId } = req.params;
+        const { page = 1, limit = 12, sort = 'featured' } = req.query;
 
-        const categoryList = categories.split(',');
-        const products = await Product.find({ categories: { $in: categoryList } });
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        // Shuffle and select 5 unique products
-        const shuffled = products.sort(() => 0.5 - Math.random());
-        handleResponse(res, 200, 'Products by categories retrieved successfully', shuffled.slice(0, 5));
+        let query = Product.find({ categories: categoryId, stock: { $gt: 0 } });
+        let countQuery = Product.countDocuments({ categories: categoryId, stock: { $gt: 0 } });
+
+        // Apply sorting
+        switch (sort) {
+            case 'price-asc':
+                query = query.sort({ 'priceOptions.price': 1 });
+                break;
+            case 'price-desc':
+                query = query.sort({ 'priceOptions.price': -1 });
+                break;
+            case 'name-asc':
+                query = query.sort({ name: 1 });
+                break;
+            case 'name-desc':
+                query = query.sort({ name: -1 });
+                break;
+            case 'date-asc':
+                query = query.sort({ createdAt: 1 });
+                break;
+            case 'date-desc':
+                query = query.sort({ createdAt: -1 });
+                break;
+            default: // featured
+                query = query.sort({ ratings: -1, numOfReviews: -1 });
+        }
+
+        const products = await query.skip(skip).limit(parseInt(limit)).lean();
+        const total = await countQuery;
+
+        // Safely process products with calculated sale prices
+        const processedProducts = products.map(product => {
+            try {
+                // Create a Product instance to access virtual fields
+                const productInstance = new Product(product);
+
+                return {
+                    ...product,
+                    calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                    hasActiveSales: productInstance.hasActiveSales,
+                    lowestPrice: productInstance.lowestPrice
+                };
+            } catch (error) {
+                console.error(`⚠️ CRITICAL: Error processing category product ${product._id}:`, error);
+                // Return original product data on error to prevent financial loss
+                return product;
+            }
+        });
+
+        handleResponse(res, 200, 'Products by category retrieved successfully', {
+            products: processedProducts,
+            total,
+            results: processedProducts.length,
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / parseInt(limit))
+        });
 
     } catch (error) {
-        handleError(res, 500, error.message);
+        console.error('⚠️ CRITICAL: Error in getProductsByCategories:', error);
+        handleError(res, 500, 'Error retrieving products by category');
+    }
+};
+
+// @desc    Get products by multiple categories
+// @route   GET /api/products/by-categories
+// @access  Public
+export const getProductsByMultipleCategories = async (req, res) => {
+    try {
+        const { categories } = req.query;
+        if (!categories) {
+            return handleError(res, 400, 'Categories parameter required');
+        }
+
+        // Parse categories - can be comma-separated string or array
+        let categoryIds = categories;
+        if (typeof categories === 'string') {
+            categoryIds = categories.split(',').map(id => id.trim());
+        }
+
+        // Validate that all category IDs are valid ObjectIds
+        const { ObjectId } = await import('mongodb');
+        const validCategoryIds = categoryIds.filter(id => ObjectId.isValid(id));
+
+        if (validCategoryIds.length === 0) {
+            return handleError(res, 400, 'No valid category IDs provided');
+        }
+
+        const products = await Product.find({ 
+            categories: { $in: validCategoryIds }, 
+            stock: { $gt: 0 } 
+        }).sort({ ratings: -1, numOfReviews: -1 }).lean();
+
+        // Safely process products with calculated sale prices
+        const processedProducts = products.map(product => {
+            try {
+                // Create a Product instance to access virtual fields
+                const productInstance = new Product(product);
+
+                return {
+                    ...product,
+                    calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                    hasActiveSales: productInstance.hasActiveSales,
+                    lowestPrice: productInstance.lowestPrice
+                };
+            } catch (error) {
+                console.error(`⚠️ CRITICAL: Error processing multi-category product ${product._id}:`, error);
+                // Return original product data on error to prevent financial loss
+                return product;
+            }
+        });
+
+        handleResponse(res, 200, 'Products by categories retrieved successfully', processedProducts);
+
+    } catch (error) {
+        console.error('⚠️ CRITICAL: Error in getProductsByMultipleCategories:', error);
+        handleError(res, 500, 'Error retrieving products by categories');
     }
 };
 
@@ -75,12 +225,32 @@ export const searchProducts = async (req, res) => {
             stock: { $gt: 0 }
         }, {
             score: { $meta: "textScore" }
-        }).sort({ score: { $meta: "textScore" } });
+        }).sort({ score: { $meta: "textScore" } }).lean();
 
-        handleResponse(res, 200, 'Search results', products);
+        // Safely process search results with calculated sale prices
+        const processedProducts = products.map(product => {
+            try {
+                // Create a Product instance to access virtual fields
+                const productInstance = new Product(product);
+
+                return {
+                    ...product,
+                    calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                    hasActiveSales: productInstance.hasActiveSales,
+                    lowestPrice: productInstance.lowestPrice
+                };
+            } catch (error) {
+                console.error(`⚠️ CRITICAL: Error processing search product ${product._id}:`, error);
+                // Return original product data on error to prevent financial loss
+                return product;
+            }
+        });
+
+        handleResponse(res, 200, 'Search results', processedProducts);
 
     } catch (error) {
-        handleError(res, 500, error.message);
+        console.error('⚠️ CRITICAL: Error in searchProducts:', error);
+        handleError(res, 500, 'Error searching products');
     }
 };
 
@@ -89,23 +259,39 @@ export const searchProducts = async (req, res) => {
 // @access  Public
 export const getProductById = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id)
-            .populate({
-                path: 'reviews',
-                select: 'rating comment user createdAt',
-                options: { sort: { createdAt: -1 } },
-                populate: { path: 'user', select: 'name' }
-            })
-            .populate({ path: 'categories', select: 'name' });
+        const product = await Product.findById(req.params.id).lean();
 
-        if (!product) return handleError(res, 404, 'Product not found');
+        if (!product) {
+            return handleError(res, 404, 'Product not found');
+        }
 
-        handleResponse(res, 200, 'Product details retrieved', product);
+        // Safely process product with calculated sale prices
+        let processedProduct;
+        try {
+            // Create a Product instance to access virtual fields
+            const productInstance = new Product(product);
+
+            processedProduct = {
+                ...product,
+                calculatedPriceOptions: productInstance.calculatedPriceOptions,
+                hasActiveSales: productInstance.hasActiveSales,
+                lowestPrice: productInstance.lowestPrice
+            };
+        } catch (error) {
+            console.error(`⚠️ CRITICAL: Error processing product ${product._id}:`, error);
+            // Return original product data on error to prevent financial loss
+            processedProduct = product;
+        }
+
+        handleResponse(res, 200, 'Product retrieved successfully', processedProduct);
 
     } catch (error) {
-        error.name === 'CastError'
-            ? handleError(res, 400, 'Invalid product ID')
-            : handleError(res, 500, error.message);
+        console.error('⚠️ CRITICAL: Error in getProductById:', error);
+        if (error.name === 'CastError') {
+            handleError(res, 400, 'Invalid product ID');
+        } else {
+            handleError(res, 500, 'Error retrieving product');
+        }
     }
 };
 

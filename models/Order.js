@@ -22,7 +22,9 @@ const orderSchema = new mongoose.Schema({
             },
             weight: Number,
             price: Number,
-            salePrice: Number
+            salePrice: Number,
+            originalPrice: Number,
+            globalSalePercentage: Number
         },
         quantity: {
             type: Number,
