@@ -1,25 +1,29 @@
-import { Resend } from 'resend';
 import dotenv from 'dotenv';
-
 dotenv.config();
+import nodemailer from 'nodemailer';
 
-let resend;
+// Debugging: Log transporter config and sender info
+console.log('SMTP2GO Transporter Config:', {
+    host: process.env.EMAIL_HOST || '',
+    port: process.env.EMAIL_PORT || 587,
+    secure: false,
+    user: process.env.EMAIL_USER || '',
+    pass: process.env.EMAIL_PASSWORD || '',
+    sender: process.env.EMAIL_FROM || ''
+});
 
-try {
-    if (!process.env.RESEND_API_KEY) {
-        console.warn('⚠️  RESEND_API_KEY not found in environment variables');
-        console.warn('📧 Email functionality will be disabled');
-        resend = null;
-    } else {
-        resend = new Resend(process.env.RESEND_API_KEY);
-        console.log('✅ Resend initialized successfully');
-    }
-} catch (error) {
-    console.error('❌ Failed to initialize Resend:', error.message);
-    resend = null;
-}
+const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || '',
+    port: process.env.EMAIL_PORT || 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USER || '',
+        pass: process.env.EMAIL_PASSWORD || '',
+    },
+    logger: true, // Enable Nodemailer logger
+    debug: true   // Enable Nodemailer debug o  utput
+});
 
+console.log('Nodemailer transporter created. Sender:', process.env.EMAIL_FROM || 'msfoodscontact <msfoodscontact@gmail.com>');
 
-
-
-export default resend;
+export default transporter;

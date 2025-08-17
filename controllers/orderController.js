@@ -7,7 +7,7 @@ import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { handleResponse, handleError } from '../utils/responseHandler.js';
 import crypto from 'crypto';
-import resend from '../config/email.js';
+import { sendEmail } from '../utils/sendEmail.js';
 import { sendWhatsAppOrderUpdate } from '../utils/sendWhatsAppMessage.js';
 import { generateOrderConfirmationEmail } from '../utils/emailTemplates.js';
 
@@ -660,21 +660,15 @@ const sendOrderNotifications = async (order, user) => {
     try {
         // Send email notification
         if (contactInfo.email) {
-            if (!resend) {
-                console.warn('⚠️  Order email not sent: Resend not initialized');
-            } else {
-                const { data, error } = await resend.emails.send({
-                    from: 'onboarding@resend.dev',
-                    to: [contactInfo.email],
+            try {
+                await sendEmail({
+                    email: contactInfo.email,
                     subject: 'Order Confirmation - MS Foods',
                     html: generateOrderConfirmationEmail(order)
                 });
-
-                if (error) {
-                    console.error('❌ Order email error:', error);
-                } else {
-                    console.log('✅ Order email sent successfully:', data);
-                }
+                console.log('✅ Order email sent successfully');
+            } catch (error) {
+                console.error('❌ Order email error:', error);
             }
         }
 
@@ -758,21 +752,15 @@ const sendStatusNotifications = async (order, status) => {
             }
 
             if (contactInfo.email) {
-                if (!resend) {
-                    console.warn('⚠️  Status email not sent: Resend not initialized');
-                } else {
-                    const { data, error } = await resend.emails.send({
-                        from: 'onboarding@resend.dev',
-                        to: [contactInfo.email],
+                try {
+                    await sendEmail({
+                        email: contactInfo.email,
                         subject: `${status} Update - Order #${order._id}`,
                         html: generateStatusEmail(order, status)
                     });
-
-                    if (error) {
-                        console.error('❌ Status email error:', error);
-                    } else {
-                        console.log('✅ Status email sent successfully:', data);
-                    }
+                    console.log('✅ Status email sent successfully');
+                } catch (error) {
+                    console.error('❌ Status email error:', error);
                 }
             }
         }
