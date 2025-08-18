@@ -34,7 +34,7 @@ const allowedOrigins = [
     'https://msfoods.vercel.app',
     'https://msfoods.pk',
     'https://www.msfoods.pk',
-    'http://localhost:3001'
+    'http://localhost:3000'
 ];
 
 const corsOptions = {

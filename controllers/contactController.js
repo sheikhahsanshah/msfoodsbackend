@@ -3,11 +3,11 @@ import { generateContactFormEmail } from '../utils/emailTemplates.js';
 
 export const sendContactEmail = async (req, res) => {
     const { name, email, subject, message, phone } = req.body;
-
+    console.log(req.body);
     try {
         const html = generateContactFormEmail({ name, email, subject, message, phone });
         // Send to your support email or wherever you want to receive contact form submissions
-        const recipient = 'support@irondize.com';
+        const recipient = process.env.EMAIL_DEFAULT || 'msfoodscontact@gmail.com';
         await sendEmail({ email: recipient, subject: `Contact Form: ${subject}`, html });
         console.log('✅ Contact email sent successfully to', recipient);
         res.status(200).json({ success: true, message: 'Email sent successfully' });    
