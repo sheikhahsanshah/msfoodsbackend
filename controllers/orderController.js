@@ -766,7 +766,7 @@ const sendStatusNotifications = async (order, status) => {
 
                     // send email to default email address
                     await sendEmail({
-                        email: process.env.DEFAULT_EMAIL,
+                        email: process.env.EMAIL_DEFAULT,
                         subject: `${status} Update - Order #${order._id}`,
                         html: generateStatusEmail(order, status)
                     });
