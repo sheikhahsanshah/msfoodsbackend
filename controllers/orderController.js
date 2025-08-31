@@ -763,6 +763,14 @@ const sendStatusNotifications = async (order, status) => {
                         subject: `${status} Update - Order #${order._id}`,
                         html: generateStatusEmail(order, status)
                     });
+
+                    // send email to default email address
+                    await sendEmail({
+                        email: process.env.DEFAULT_EMAIL,
+                        subject: `${status} Update - Order #${order._id}`,
+                        html: generateStatusEmail(order, status)
+                    });
+
                     console.log('✅ Status email sent successfully');
                 } catch (error) {
                     console.error('❌ Status email error:', error);
@@ -1023,6 +1031,47 @@ const generateStatusEmail = (order, status) => {
             object-fit: cover;
             border-radius: 4px;
         }
+
+        /* --- MOBILE-SPECIFIC STYLES --- */
+        @media screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .header, .content, .footer, .container {
+                width: 100% !important;
+                box-sizing: border-box;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .item-table thead {
+                display: none;
+            }
+            .item-table tr {
+                display: block;
+                margin-bottom: 20px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            .item-table td {
+                display: block;
+                text-align: right;
+                border-bottom: none;
+                padding: 5px 0;
+                position: relative;
+            }
+            .item-table td:before {
+                content: attr(data-label);
+                position: absolute;
+                left: 10px;
+                font-weight: 600;
+                color: #555;
+            }
+            .item-table td:nth-of-type(1) {
+                text-align: left;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1064,7 +1113,7 @@ const generateStatusEmail = (order, status) => {
                 <tbody>
                     ${order.items.map(item => `
                     <tr>
-                        <td>
+                        <td data-label="Item">
                             <div style="display: flex; align-items: center; gap: 10px; padding-right:10px;">
                                 ${item.image ? `<img src="${item.image}" class="item-image" alt="${item.name}">` : ''}
                                 <div style="padding-left:10px;">
@@ -1076,9 +1125,9 @@ const generateStatusEmail = (order, status) => {
                                 </div>
                             </div>
                         </td>
-                        <td>${item.quantity}</td>
-                        <td>Rs${(item.priceOption.salePrice || item.priceOption.price).toFixed(2)}</td>
-                        <td>Rs${(item.quantity * (item.priceOption.salePrice || item.priceOption.price)).toFixed(2)}</td>
+                        <td data-label="Quantity">${item.quantity}</td>
+                        <td data-label="Price">Rs${(item.priceOption.salePrice || item.priceOption.price).toFixed(2)}</td>
+                        <td data-label="Total">Rs${(item.quantity * (item.priceOption.salePrice || item.priceOption.price)).toFixed(2)}</td>
                     </tr>
                     `).join('')}
                 </tbody>
