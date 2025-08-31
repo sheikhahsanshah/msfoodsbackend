@@ -672,7 +672,9 @@ const sendOrderNotifications = async (order, user) => {
             }
         }
 
-        // Send WhatsApp notification
+        // Send WhatsApp notification for order confirmation
+        // NOTE: This only sends if user.verificationMethod === 'phone'
+        // If you don't want WhatsApp notifications, comment out or remove this block
         if (contactInfo.phone && user?.verificationMethod === 'phone') {
             await sendWhatsAppOrderUpdate(
                 contactInfo.phone,
@@ -743,13 +745,16 @@ const sendStatusNotifications = async (order, status) => {
             const templateConfig = statusParams[status];
             const fullParams = { ...baseParams, ...templateConfig.params };
 
-            if (contactInfo.phone) {
-                await sendWhatsAppOrderUpdate(
-                    contactInfo.phone,
-                    templateConfig.template,
-                    fullParams
-                );
-            }
+            // Send WhatsApp notification for status update
+            // NOTE: This sends to all users with a phone number, regardless of verification method
+            // If you don't want WhatsApp notifications, comment out or remove this block
+            // if (contactInfo.phone) {
+            //     await sendWhatsAppOrderUpdate(
+            //         contactInfo.phone,
+            //         templateConfig.template,
+            //         fullParams
+            //     );
+            // }
 
             if (contactInfo.email) {
                 try {
