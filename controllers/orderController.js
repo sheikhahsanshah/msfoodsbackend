@@ -757,24 +757,35 @@ const sendStatusNotifications = async (order, status) => {
             // }
 
             if (contactInfo.email) {
+                // Send to customer first (isolated try so failure doesn't block default notification)
                 try {
+                    console.log('Sending status email to customer:', contactInfo.email);
                     await sendEmail({
                         email: contactInfo.email,
                         subject: `${status} Update - Order #${order._id}`,
                         html: generateStatusEmail(order, status)
                     });
+                    console.log('✅ Status email sent to customer:', contactInfo.email);
+                } catch (error) {
+                    console.error('❌ Failed to send status email to customer:', contactInfo.email, error);
+                }
+            }
 
-                    // send email to default email address
+            // Always try to send a copy to the default support email (isolated try)
+            if (process.env.EMAIL_DEFAULT) {
+                try {
+                    console.log('Sending status email to default address:', process.env.EMAIL_DEFAULT);
                     await sendEmail({
                         email: process.env.EMAIL_DEFAULT,
                         subject: `${status} Update - Order #${order._id}`,
                         html: generateStatusEmail(order, status)
                     });
-
-                    console.log('✅ Status email sent successfully');
+                    console.log('✅ Status email sent to default address:', process.env.EMAIL_DEFAULT);
                 } catch (error) {
-                    console.error('❌ Status email error:', error);
+                    console.error('❌ Failed to send status email to default address:', process.env.EMAIL_DEFAULT, error);
                 }
+            } else {
+                console.warn('No EMAIL_DEFAULT configured; skipping default copy.');
             }
         }
     } catch (error) {
