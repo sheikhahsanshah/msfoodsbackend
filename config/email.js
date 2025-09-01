@@ -21,7 +21,8 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASSWORD || '',
     },
     logger: true, // Enable Nodemailer logger
-    debug: true   // Enable Nodemailer debug o  utput
+    debug: true,   // Enable Nodemailer debug output
+    pool: true
 });
 
 console.log('Nodemailer transporter created. Sender:', process.env.EMAIL_FROM || 'msfoodscontact <msfoodscontact@gmail.com>');
