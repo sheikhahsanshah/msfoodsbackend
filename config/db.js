@@ -18,12 +18,14 @@ const connectDB = async () => {
 
         console.log(`MongoDB Connected: ${conn.connection.host}`);
 
+
+        
         // Database event listeners
         mongoose.connection.on('connected', () => {
             console.log('Mongoose connected to DB');
         });
-
         mongoose.connection.on('error', (err) => {
+
             console.log(`Mongoose connection error: ${err}`);
         });
 

@@ -20,7 +20,7 @@ export const orderController = {
     try {
       // 1) Extract & parse body fields
       let { paymentMethod, couponCode } = req.body;
-      let items = req.body.items;
+      let items = req.body.items; 
       let shippingAddress = req.body.shippingAddress;
 
       // If sent as FormData, these arrive as strings → parse them
@@ -1015,7 +1015,6 @@ const generateOrderEmail = (order) => `
         <p>Payment Method: ${order.paymentMethod}</p>
     </div>
 `;
-
 const generateStatusEmail = (order, status) => {
   const statusInfo = {
     Processing: {
@@ -1045,6 +1044,18 @@ const generateStatusEmail = (order, status) => {
     },
   };
 
+  // Calculate sale savings and coupon discount
+  const saleSavings = order.items.reduce((total, item) => {
+    const original = item.priceOption.originalPrice || item.priceOption.price;
+    const sale = item.priceOption.salePrice || item.priceOption.price;
+    return total + (original - sale) * item.quantity;
+  }, 0);
+
+  const couponDiscount = order.discount || 0;
+
+  // Helper to remove floating points
+  const nf = (num) => Math.round(num);
+
   return `
 <!DOCTYPE html>
 <html>
@@ -1053,14 +1064,27 @@ const generateStatusEmail = (order, status) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Update</title>
     <style>
+        /* General body and container styling */
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
             color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 100%;
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
         }
+
+        /* Header and content sections */
         .header {
             background-color: ${statusInfo[status].color};
             padding: 30px 20px;
@@ -1068,30 +1092,28 @@ const generateStatusEmail = (order, status) => {
             color: white;
             border-radius: 8px 8px 0 0;
         }
+
         .header h1 {
             margin: 0;
             font-size: 24px;
             font-weight: 600;
         }
-        .container {
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
+
         .content {
             padding: 30px;
-            background-color: #ffffff;
         }
+
         .order-info {
             background-color: #f9f9f9;
             padding: 20px;
             border-radius: 6px;
             margin-bottom: 25px;
         }
+
         .order-info p {
             margin: 8px 0;
         }
+
         .tracking-info {
             background-color: #f0f7ff;
             padding: 20px;
@@ -1099,6 +1121,7 @@ const generateStatusEmail = (order, status) => {
             margin: 25px 0;
             border-left: 4px solid ${statusInfo[status].color};
         }
+
         .button {
             display: inline-block;
             padding: 12px 24px;
@@ -1109,6 +1132,7 @@ const generateStatusEmail = (order, status) => {
             font-weight: 600;
             margin-top: 15px;
         }
+
         .footer {
             text-align: center;
             padding: 20px;
@@ -1116,21 +1140,26 @@ const generateStatusEmail = (order, status) => {
             font-size: 12px;
             border-top: 1px solid #eee;
         }
+
+        /* Item table styling */
         .item-table {
             width: 100%;
             border-collapse: collapse;
             margin: 20px 0;
         }
+
         .item-table th {
             text-align: left;
             padding: 10px;
             background-color: #f5f5f5;
             border-bottom: 2px solid #ddd;
         }
+
         .item-table td {
             padding: 15px 10px;
             border-bottom: 1px solid #eee;
         }
+
         .item-image {
             width: 60px;
             height: 60px;
@@ -1138,21 +1167,24 @@ const generateStatusEmail = (order, status) => {
             border-radius: 4px;
         }
 
-        /* --- MOBILE-SPECIFIC STYLES --- */
+        /* Responsive styles for mobile */
         @media screen and (max-width: 600px) {
             body {
                 padding: 10px;
             }
-            .header, .content, .footer, .container {
-                width: 100% !important;
-                box-sizing: border-box;
+            .container {
+                border-radius: 0;
             }
             .header h1 {
                 font-size: 20px;
             }
+
+            /* Hiding table headers on mobile */
             .item-table thead {
                 display: none;
             }
+            
+            /* Making each row a block element */
             .item-table tr {
                 display: block;
                 margin-bottom: 20px;
@@ -1160,6 +1192,8 @@ const generateStatusEmail = (order, status) => {
                 border-radius: 8px;
                 padding: 10px;
             }
+
+            /* Styling each cell to show as a block with a label */
             .item-table td {
                 display: block;
                 text-align: right;
@@ -1167,6 +1201,7 @@ const generateStatusEmail = (order, status) => {
                 padding: 5px 0;
                 position: relative;
             }
+
             .item-table td:before {
                 content: attr(data-label);
                 position: absolute;
@@ -1174,7 +1209,9 @@ const generateStatusEmail = (order, status) => {
                 font-weight: 600;
                 color: #555;
             }
-            .item-table td:nth-of-type(1) {
+
+            /* Special alignment for the first column (item details) */
+            .item-table td:first-of-type {
                 text-align: left;
             }
         }
@@ -1185,17 +1222,14 @@ const generateStatusEmail = (order, status) => {
         <div class="header">
             <h1>${statusInfo[status].title}</h1>
         </div>
-        
         <div class="content">
             <p>Dear ${order.shippingAddress.fullName},</p>
             <p>${statusInfo[status].message}</p>
-            
             <div class="order-info">
                 <p><strong>Order Number:</strong> #${order._id}</p>
                 <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
                 <p><strong>Status:</strong> <span style="color: ${statusInfo[status].color}; font-weight: 600">${status}</span></p>
             </div>
-            
             ${
               status === "Shipped" && order.trackingId
                 ? `
@@ -1213,7 +1247,6 @@ const generateStatusEmail = (order, status) => {
             `
                 : ""
             }
-            
             <h3 style="margin-bottom: 15px">Order Summary</h3>
             <table class="item-table">
                 <thead>
@@ -1236,8 +1269,7 @@ const generateStatusEmail = (order, status) => {
                                     <div style="font-weight: 600">${item.name}</div>
                                     <div style="font-size: 12px; color: #777">
                                         ${
-                                          item.priceOption.type ===
-                                          "weight-based"
+                                          item.priceOption.type === "weight-based"
                                             ? `${item.priceOption.weight}g`
                                             : "Packet"
                                         }
@@ -1245,35 +1277,25 @@ const generateStatusEmail = (order, status) => {
                                 </div>
                             </div>
                         </td>
-                        <td data-label="Quantity">${item.quantity}</td>
-                        <td data-label="Price">Rs${(item.priceOption.salePrice || item.priceOption.price).toFixed(2)}</td>
-                        <td data-label="Total">Rs${(item.quantity * (item.priceOption.salePrice || item.priceOption.price)).toFixed(2)}</td>
+                        <td data-label="Quantity">${item.quantity}</td> 
+                        <td data-label="Price">Rs${nf(item.priceOption.salePrice || item.priceOption.price)}</td>
+                        <td data-label="Total">Rs${nf(item.quantity * (item.priceOption.salePrice || item.priceOption.price))}</td>
                     </tr>
                     `
                       )
                       .join("")}
                 </tbody>
             </table>
-            <div style="text-align: right; margin-top: 20px">
-                <p><strong>Subtotal:</strong> Rs${order.subtotal.toFixed(2)}</p>
-                <p><strong>Shipping:</strong> Rs${order.shippingCost.toFixed(2)}</p>
-                ${order.discount > 0 ? `<p><strong>Discount:</strong> -Rs${order.discount.toFixed(2)}</p>` : ""}
-                ${order.couponUsed ? `<p><strong>Coupon Applied:</strong> ${order.couponUsed.code || ""}</p>` : ""}
-                ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${order.codFee.toFixed(2)}</p>` : ""}
+            <div style="text-align: left; margin-top: 20px">
+                <p><strong>Total:</strong> Rs${nf(order.subtotal)}</p>
+                ${saleSavings !== 0 ? `<p><strong>Sale Savings:</strong> -Rs${nf(saleSavings)}</p>` : ""}
+                ${couponDiscount !== 0 ? `<p><strong>Coupon discount:</strong> -Rs${nf(couponDiscount)}</p>` : ""}
+                <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
+                ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
                 <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
-                <strong>Total:</strong> Rs${order.totalAmount.toFixed(2)}
+                <strong>Total:</strong> Rs${nf(order.totalAmount)}
                 </p>
             </div>
-            
-            <div style="text-align: right; margin-top: 20px">
-                <p><strong>Subtotal:</strong> Rs${order.subtotal.toFixed(2)}</p>
-                <p><strong>Shipping:</strong> Rs${order.shippingCost.toFixed(2)}</p>
-                ${order.discount > 0 ? `<p><strong>Discount:</strong> -Rs${order.discount.toFixed(2)}</p>` : ""}
-                <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
-                    <strong>Total:</strong> Rs${order.totalAmount.toFixed(2)}
-                </p>
-            </div>
-            
             <div style="margin-top: 30px">
                 <h3>Shipping Address</h3>
                 <p>${order.shippingAddress.fullName}</p>
@@ -1282,7 +1304,6 @@ const generateStatusEmail = (order, status) => {
                 <p>${order.shippingAddress.country}</p>
             </div>
         </div>
-        
         <div class="footer">
             <p>If you have any questions, please contact our support team at support@yourstore.com</p>
             <p>© ${new Date().getFullYear()} Your Store Name. All rights reserved.</p>

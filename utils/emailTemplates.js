@@ -21,7 +21,6 @@ export const passwordResetEmail = (name, url) => `
 `;
 
 // Improved Email Templates for Better Deliverability
-
 export const generateOrderConfirmationEmail = (order) => {
     const orderNumber = order._id.toString().substr(-6);
     const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
@@ -29,6 +28,17 @@ export const generateOrderConfirmationEmail = (order) => {
         month: 'long',
         day: 'numeric'
     });
+
+    // Helper to format numbers to two decimals
+    const formatAmount = (amount) => Number(amount || 0).toFixed(2);
+
+    // Calculate sale savings (original price - sale price) * quantity, safely
+    const saleSavings = (order.items || []).reduce((total, item) => {
+        const original = item?.priceOption?.originalPrice ?? item?.priceOption?.price ?? item?.price ?? 0;
+        const sale = item?.priceOption?.salePrice ?? item?.priceOption?.price ?? item?.price ?? 0;
+        const qty = item?.quantity ?? 0;
+        return total + Math.max(0, (original - sale)) * qty;
+    }, 0);
 
     return `
         <!DOCTYPE html>
@@ -52,7 +62,7 @@ export const generateOrderConfirmationEmail = (order) => {
                     <h3 style="color: #2c3e50; margin-top: 0;">Order Details</h3>
                     <p><strong>Order Number:</strong> #${orderNumber}</p>
                     <p><strong>Order Date:</strong> ${orderDate}</p>
-                    <p><strong>Total Amount:</strong> Rs. ${order.totalAmount.toFixed(2)}</p>
+                    <p><strong>Total Amount:</strong> Rs. ${formatAmount(order.totalAmount)}</p>
                     <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
                     <p><strong>Status:</strong> ${order.status}</p>
                 </div>
@@ -68,22 +78,23 @@ export const generateOrderConfirmationEmail = (order) => {
                 
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <h3 style="color: #2c3e50; margin-top: 0;">Order Items</h3>
-                    ${order.items.map(item => `
+                    ${(order.items || []).map(item => `
                         <div style="border-bottom: 1px solid #eee; padding: 10px 0;">
-                            <p><strong>${item.product.name}</strong></p>
-                            <p>Quantity: ${item.quantity}</p>
-                            <p>Price: Rs. ${item.price.toFixed(2)}</p>
+                            <p><strong>${item.product?.name || item.name || 'Item'}</strong></p>
+                            <p>Quantity: ${item.quantity ?? 0}</p>
+                            <p>Price: Rs. ${formatAmount(item?.priceOption?.salePrice ?? item?.priceOption?.price ?? item?.price)}</p>
                         </div>
                     `).join('')}
                 </div>
                 
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <h3 style="color: #2c3e50; margin-top: 0;">Order Summary</h3>
-                    <p><strong>Subtotal:</strong> Rs. ${order.subtotal.toFixed(2)}</p>
-                    <p><strong>Shipping:</strong> Rs. ${order.shippingCost.toFixed(2)}</p>
-                    ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs. ${order.codFee.toFixed(2)}</p>` : ''}
-                    ${order.discount > 0 ? `<p><strong>Discount:</strong> -Rs. ${order.discount.toFixed(2)}</p>` : ''}
-                    <p style="font-size: 18px; font-weight: bold; color: #27ae60;"><strong>Total:</strong> Rs. ${order.totalAmount.toFixed(2)}</p>
+                    <p><strong>Total:</strong> Rs. ${formatAmount(order.subtotal)}</p>
+                    <p><strong>Sale Savings:</strong> Rs. ${formatAmount(saleSavings)}</p>
+                    <p><strong>Coupon discount:</strong> Rs. ${order.discount ? formatAmount(order.discount) : '0'}</p>
+                    <p><strong>Shipping:</strong> Rs. ${formatAmount(order.shippingCost)}</p>
+                    ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs. ${formatAmount(order.codFee)}</p>` : ''}
+                    <p style="font-size: 18px; font-weight: bold; color: #27ae60; margin-top: 20px;"><strong>Total:</strong> Rs. ${formatAmount(order.totalAmount)}</p>
                 </div>
                 
                 <p>We'll send you updates as your order progresses. You can track your order status in your account dashboard.</p>
