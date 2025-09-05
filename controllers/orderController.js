@@ -255,7 +255,7 @@ export const orderController = {
     session.startTransaction();
 
     try {
-      const { status, trackingId } = req.body;
+      const { status /*, trackingId*/ } = req.body;
 
       // Validate status exists and is a string
       if (typeof status !== "string") {
@@ -277,17 +277,17 @@ export const orderController = {
         return handleError(res, 400, "Invalid status value");
       }
 
-      // Validate tracking ID for shipped orders
-      if (normalizedStatus === "shipped") {
-        if (typeof trackingId !== "string" || !trackingId.trim()) {
-          await session.abortTransaction();
-          return handleError(
-            res,
-            400,
-            "Tracking ID is required for shipped orders"
-          );
-        }
-      }
+      // Validate tracking ID for shipped orders (no longer needed)
+      // if (normalizedStatus === "shipped") {
+      //   if (typeof trackingId !== "string" || !trackingId.trim()) {
+      //     await session.abortTransaction();
+      //     return handleError(
+      //       res,
+      //       400,
+      //       "Tracking ID is required for shipped orders"
+      //     );
+      //   }
+      // }
 
       // Format status correctly
       const formattedStatus =
@@ -297,7 +297,7 @@ export const orderController = {
         req.params.id,
         {
           status: formattedStatus,
-          trackingId: trackingId || undefined,
+          // trackingId: trackingId || undefined, // No longer needed
         },
         { new: true, session }
       ).populate("user");
