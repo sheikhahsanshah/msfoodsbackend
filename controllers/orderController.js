@@ -978,77 +978,68 @@ const getDateRange = (period, startDate, endDate) => {
 };
 
 const generateOrderEmail = (order) => `
-    <div style="max-width: 600px; margin: 20px auto; padding: 20px;">
-        <h2>Order Confirmation #${order._id}</h2>
-        <p>Thank you for your order! Here are your order details:</p>
-        
+  <div style="max-width: 600px; margin: 20px auto; padding: 20px;">
+    <h2>Order Confirmation #${order._id}</h2>
+    <p>Thank you for your order! Here are your order details:</p>
+    
  <h3>Order Status: ${order.status}</h3>
+  
+    <h3>Shipping Address</h3>
+    <p>${Object.values(order.shippingAddress).filter(Boolean).join(", ")}</p>
     
-    ${
-      order.trackingId
-        ? `
-      <h3>Tracking Information</h3>
-      <p>Tracking ID: ${order.trackingId}</p>
-    `
-        : ""
-    }
+    <h3>Order Items</h3>
+    <ul>
+      ${order.items
+        .map(
+        (item) => `
+        <li>
+          ${item.name} - 
+          ${item.quantity} packets
+          @ Rs${item.priceOption.price}
+        </li>
+      `
+        )
+        .join("")}
+    </ul>
     
-        <h3>Shipping Address</h3>
-        <p>${Object.values(order.shippingAddress).filter(Boolean).join(", ")}</p>
-        
-        <h3>Order Items</h3>
-        <ul>
-            ${order.items
-              .map(
-                (item) => `
-                <li>
-                    ${item.name} - 
-                    ${item.quantity} packets
-                    @ Rs${item.priceOption.price}
-                </li>
-            `
-              )
-              .join("")}
-        </ul>
-        
-        <h3>Total: Rs${order.totalAmount}</h3>
-        <p>Payment Method: ${order.paymentMethod}</p>
-    </div>
+    <h3>Total: Rs${order.totalAmount}</h3>
+    <p>Payment Method: ${order.paymentMethod}</p>
+  </div>
 `;
 const generateStatusEmail = (order, status) => {
   const statusInfo = {
-    Processing: {
-      title: "Order Processing",
-      message: "We've received your order and are preparing it for shipment.",
-      color: "#3498db",
-    },
-    Shipped: {
-      title: "Order Shipped!",
-      message: "Your order is on its way to you!",
-      color: "#2ecc71",
-    },
-    Delivered: {
-      title: "Order Delivered",
-      message: "Your order has been successfully delivered.",
-      color: "#27ae60",
-    },
-    Cancelled: {
-      title: "Order Cancelled",
-      message: "Your order has been cancelled as requested.",
-      color: "#e74c3c",
-    },
-    Returned: {
-      title: "Return Processed",
-      message: "We've received your returned items.",
-      color: "#f39c12",
-    },
+  Processing: {
+    title: "Order Processing",
+    message: "We've received your order and are preparing it for shipment.",
+    color: "#3498db",
+  },
+  Shipped: {
+    title: "Order Shipped!",
+    message: "Your order is on its way to you!",
+    color: "#2ecc71",
+  },
+  Delivered: {
+    title: "Order Delivered",
+    message: "Your order has been successfully delivered.",
+    color: "#27ae60",
+  },
+  Cancelled: {
+    title: "Order Cancelled",
+    message: "Your order has been cancelled as requested.",
+    color: "#e74c3c",
+  },
+  Returned: {
+    title: "Return Processed",
+    message: "We've received your returned items.",
+    color: "#f39c12",
+  },
   };
 
   // Calculate sale savings and coupon discount
   const saleSavings = order.items.reduce((total, item) => {
-    const original = item.priceOption.originalPrice || item.priceOption.price;
-    const sale = item.priceOption.salePrice || item.priceOption.price;
-    return total + (original - sale) * item.quantity;
+  const original = item.priceOption.originalPrice || item.priceOption.price;
+  const sale = item.priceOption.salePrice || item.priceOption.price;
+  return total + (original - sale) * item.quantity;
   }, 0);
 
   const couponDiscount = order.discount || 0;
@@ -1060,255 +1051,204 @@ const generateStatusEmail = (order, status) => {
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Update</title>
-    <style>
-        /* General body and container styling */
-        body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        /* Header and content sections */
-        .header {
-            background-color: ${statusInfo[status].color};
-            padding: 30px 20px;
-            text-align: center;
-            color: white;
-            border-radius: 8px 8px 0 0;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 600;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        .order-info {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border-radius: 6px;
-            margin-bottom: 25px;
-        }
-
-        .order-info p {
-            margin: 8px 0;
-        }
-
-        .tracking-info {
-            background-color: #f0f7ff;
-            padding: 20px;
-            border-radius: 6px;
-            margin: 25px 0;
-            border-left: 4px solid ${statusInfo[status].color};
-        }
-
-        .button {
-            display: inline-block;
-            padding: 12px 24px;
-            background-color: ${statusInfo[status].color};
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: 600;
-            margin-top: 15px;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 20px;
-            color: #777;
-            font-size: 12px;
-            border-top: 1px solid #eee;
-        }
-
-        /* Item table styling */
-        .item-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-
-        .item-table th {
-            text-align: left;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-bottom: 2px solid #ddd;
-        }
-
-        .item-table td {
-            padding: 15px 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .item-image {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 4px;
-        }
-
-        /* Responsive styles for mobile */
-        @media screen and (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                border-radius: 0;
-            }
-            .header h1 {
-                font-size: 20px;
-            }
-
-            /* Hiding table headers on mobile */
-            .item-table thead {
-                display: none;
-            }
-            
-            /* Making each row a block element */
-            .item-table tr {
-                display: block;
-                margin-bottom: 20px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 10px;
-            }
-
-            /* Styling each cell to show as a block with a label */
-            .item-table td {
-                display: block;
-                text-align: right;
-                border-bottom: none;
-                padding: 5px 0;
-                position: relative;
-            }
-
-            .item-table td:before {
-                content: attr(data-label);
-                position: absolute;
-                left: 10px;
-                font-weight: 600;
-                color: #555;
-            }
-
-            /* Special alignment for the first column (item details) */
-            .item-table td:first-of-type {
-                text-align: left;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Update</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .header {
+      background-color: ${statusInfo[status].color};
+      padding: 30px 20px;
+      text-align: center;
+      color: white;
+      border-radius: 8px 8px 0 0;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 30px;
+    }
+    .order-info {
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 6px;
+      margin-bottom: 25px;
+    }
+    .order-info p {
+      margin: 8px 0;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: ${statusInfo[status].color};
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-top: 15px;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #777;
+      font-size: 12px;
+      border-top: 1px solid #eee;
+    }
+    .item-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .item-table th {
+      text-align: left;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-bottom: 2px solid #ddd;
+    }
+    .item-table td {
+      padding: 15px 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .item-image {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    @media screen and (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        border-radius: 0;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .item-table thead {
+        display: none;
+      }
+      .item-table tr {
+        display: block;
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .item-table td {
+        display: block;
+        text-align: right;
+        border-bottom: none;
+        padding: 5px 0;
+        position: relative;
+      }
+      .item-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        font-weight: 600;
+        color: #555;
+      }
+      .item-table td:first-of-type {
+        text-align: left;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>${statusInfo[status].title}</h1>
-        </div>
-        <div class="content">
-            <p>Dear ${order.shippingAddress.fullName},</p>
-            <p>${statusInfo[status].message}</p>
-            <div class="order-info">
-                <p><strong>Order Number:</strong> #${order._id}</p>
-                <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-                <p><strong>Status:</strong> <span style="color: ${statusInfo[status].color}; font-weight: 600">${status}</span></p>
-            </div>
-            ${
-              status === "Shipped" && order.trackingId
-                ? `
-            <div class="tracking-info">
-                <h3 style="margin-top: 0">Tracking Information</h3>
-                <p><strong>Tracking Number:</strong> ${order.trackingId}</p>
-                ${
-                  process.env.TRACKING_BASE_URL
-                    ? `
-                <a href="${process.env.TRACKING_BASE_URL}/${order.trackingId}" class="button">Track Your Package</a>
-                `
-                    : ""
-                }
-            </div>
-            `
-                : ""
-            }
-            <h3 style="margin-bottom: 15px">Order Summary</h3>
-            <table class="item-table">
-                <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th>Quantity</th>
-                        <th>Price</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${order.items
-                      .map(
-                        (item) => `
-                    <tr>
-                        <td data-label="Item">
-                            <div style="display: flex; align-items: center; gap: 10px; padding-right:10px;">
-                                ${item.image ? `<img src="${item.image}" class="item-image" alt="${item.name}">` : ""}
-                                <div style="padding-left:10px;">
-                                    <div style="font-weight: 600">${item.name}</div>
-                                    <div style="font-size: 12px; color: #777">
-                                        ${
-                                          item.priceOption.type === "weight-based"
-                                            ? `${item.priceOption.weight}g`
-                                            : "Packet"
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        </td>
-                        <td data-label="Quantity">${item.quantity}</td> 
-                        <td data-label="Price">Rs${nf(item.priceOption.salePrice || item.priceOption.price)}</td>
-                        <td data-label="Total">Rs${nf(item.quantity * (item.priceOption.salePrice || item.priceOption.price))}</td>
-                    </tr>
-                    `
-                      )
-                      .join("")}
-                </tbody>
-            </table>
-            <div style="text-align: left; margin-top: 20px">
-                <p><strong>Total:</strong> Rs${nf(order.subtotal)}</p>
-                ${saleSavings !== 0 ? `<p><strong>Sale Savings:</strong> -Rs${nf(saleSavings)}</p>` : ""}
-                ${couponDiscount !== 0 ? `<p><strong>Coupon discount:</strong> -Rs${nf(couponDiscount)}</p>` : ""}
-                <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
-                ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
-                <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
-                <strong>Total:</strong> Rs${nf(order.totalAmount)}
-                </p>
-            </div>
-            <div style="margin-top: 30px">
-                <h3>Shipping Address</h3>
-                <p>${order.shippingAddress.fullName}</p>
-                <p>${order.shippingAddress.address}</p>
-                <p>${order.shippingAddress.city}${order.shippingAddress.postalCode ? `, ${order.shippingAddress.postalCode}` : ""}</p>
-                <p>${order.shippingAddress.country}</p>
-            </div>
-        </div>
-        <div class="footer">
-            <p>If you have any questions, please contact our support team at support@yourstore.com</p>
-            <p>© ${new Date().getFullYear()} Your Store Name. All rights reserved.</p>
-        </div>
+  <div class="container">
+    <div class="header">
+      <h1>${statusInfo[status].title}</h1>
     </div>
+    <div class="content">
+      <p>Dear ${order.shippingAddress.fullName},</p>
+      <p>${statusInfo[status].message}</p>
+      <div class="order-info">
+        <p><strong>Order Number:</strong> #${order._id}</p>
+        <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+        <p><strong>Status:</strong> <span style="color: ${statusInfo[status].color}; font-weight: 600">${status}</span></p>
+      </div>
+      <h3 style="margin-bottom: 15px">Order Summary</h3>
+      <table class="item-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Quantity</th>
+            <th>Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${order.items
+            .map(
+            (item) => `
+          <tr>
+            <td data-label="Item">
+              <div style="display: flex; align-items: center; gap: 10px; padding-right:10px;">
+                ${item.image ? `<img src="${item.image}" class="item-image" alt="${item.name}">` : ""}
+                <div style="padding-left:10px;">
+                  <div style="font-weight: 600">${item.name}</div>
+                  <div style="font-size: 12px; color: #777">
+                    ${
+                      item.priceOption.type === "weight-based"
+                      ? `${item.priceOption.weight}g`
+                      : "Packet"
+                    }
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td data-label="Quantity">${item.quantity}</td> 
+            <td data-label="Price">Rs${nf(item.priceOption.salePrice || item.priceOption.price)}</td>
+            <td data-label="Total">Rs${nf(item.quantity * (item.priceOption.salePrice || item.priceOption.price))}</td>
+          </tr>
+          `
+            )
+            .join("")}
+        </tbody>
+      </table>
+      <div style="text-align: left; margin-top: 20px">
+        <p><strong>Total:</strong> Rs${nf(order.subtotal)}</p>
+        ${saleSavings !== 0 ? `<p><strong>Sale Savings:</strong> -Rs${nf(saleSavings)}</p>` : ""}
+        ${couponDiscount !== 0 ? `<p><strong>Coupon discount:</strong> -Rs${nf(couponDiscount)}</p>` : ""}
+        <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
+        ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
+        <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
+        <strong>Total:</strong> Rs${nf(order.totalAmount)}
+        </p>
+      </div>
+      <div style="margin-top: 30px">
+        <h3>Shipping Address</h3>
+        <p>${order.shippingAddress.fullName}</p>
+        <p>${order.shippingAddress.address}</p>
+        <p>${order.shippingAddress.city}${order.shippingAddress.postalCode ? `, ${order.shippingAddress.postalCode}` : ""}</p>
+        <p>${order.shippingAddress.country}</p>
+      </div>
+    </div>
+    <div class="footer">
+      <p>If you have any questions, please contact our support team at support@yourstore.com</p>
+      <p>© ${new Date().getFullYear()} Your Store Name. All rights reserved.</p>
+    </div>
+  </div>
 </body>
 </html>
   `;
