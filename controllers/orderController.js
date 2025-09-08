@@ -1050,6 +1050,9 @@ const generateStatusEmail = (order, status) => {
     const originalPrice = item.priceOption.originalPrice || item.priceOption.price;
     return total + item.quantity * originalPrice;
   }, 0);
+  
+  // Calculate the final total amount based on the provided values
+  const finalTotal = (order.subtotal + order.shippingCost + order.codFee) - couponDiscount;
 
   return `
 <!DOCTYPE html>
@@ -1357,7 +1360,7 @@ const generateStatusEmail = (order, status) => {
         ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
         <div style="border-top: 1px solid #eee; margin: 15px 0;"></div>
         <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
-        <strong>Total:</strong> Rs${nf(order.totalAmount)}
+        <strong>Total:</strong> Rs${nf(finalTotal)}
         </p>
       </div>
       <div style="margin-top: 30px">
