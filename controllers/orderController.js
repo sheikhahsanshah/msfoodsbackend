@@ -1006,7 +1006,6 @@ const generateOrderEmail = (order) => `
     <p>Payment Method: ${order.paymentMethod}</p>
   </div>
 `;
-
 const generateStatusEmail = (order, status) => {
   const statusInfo = {
     Processing: {
@@ -1125,13 +1124,16 @@ const generateStatusEmail = (order, status) => {
     }
     .item-table th {
       text-align: left;
-      padding: 10px;
+      padding: 12px 10px;
       background-color: #f5f5f5;
       border-bottom: 2px solid #ddd;
+      font-weight: 600;
+      color: #555;
     }
     .item-table td {
       padding: 15px 10px;
       border-bottom: 1px solid #eee;
+      vertical-align: middle;
     }
     .item-image {
       width: 60px;
@@ -1139,54 +1141,157 @@ const generateStatusEmail = (order, status) => {
       object-fit: cover;
       border-radius: 4px;
     }
+    .item-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .item-details h4 {
+      margin: 0 0 4px 0;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .item-details .item-meta {
+      font-size: 12px;
+      color: #777;
+      margin: 0;
+    }
+
+    /* Mobile Styles */
     @media screen and (max-width: 600px) {
       body {
         padding: 10px;
       }
       .container {
-        border-radius: 0;
+        border-radius: 4px;
+      }
+      .content {
+        padding: 20px;
+      }
+      .header {
+        padding: 20px;
       }
       .header h1 {
         font-size: 20px;
       }
-      .item-table thead {
-        display: none;
+      
+      /* Mobile table styling - keep headers visible but make them smaller */
+      .item-table {
+        font-size: 13px;
       }
-      .item-table tr {
-        display: block;
-        margin-bottom: 20px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 10px;
-      }
-      .item-table td {
-        display: flex; /* Change to flex */
-        justify-content: space-between; /* To align label and value */
-        align-items: center; /* Vertically center them */
-        padding: 5px 0;
+      
+      .item-table th {
+        padding: 8px 5px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background-color: ${statusInfo[status].color};
+        color: white;
         border-bottom: none;
       }
-      .item-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #555;
+      
+      .item-table td {
+        padding: 12px 5px;
+        font-size: 13px;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
       }
-      .item-table td:first-of-type {
+      
+      /* First column (Item) should be left aligned and wider */
+      .item-table th:first-child,
+      .item-table td:first-child {
         text-align: left;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
+        width: 45%;
       }
-      .item-table td:first-of-type:before {
-        display: none;
+      
+      /* Make other columns smaller and centered */
+      .item-table th:nth-child(2),
+      .item-table td:nth-child(2) {
+        width: 15%;
+        text-align: center;
       }
+      
+      .item-table th:nth-child(3),
+      .item-table td:nth-child(3) {
+        width: 20%;
+        text-align: center;
+      }
+      
+      .item-table th:nth-child(4),
+      .item-table td:nth-child(4) {
+        width: 20%;
+        text-align: center;
+        font-weight: 600;
+        color: ${statusInfo[status].color};
+      }
+      
+      /* Adjust item info for mobile */
+      .item-info {
+        gap: 8px;
+      }
+      
       .item-image {
-        margin-right: 10px;
+        width: 40px;
+        height: 40px;
       }
-      .item-details {
-        display: flex;
-        align-items: center;
-        gap: 10px;
+      
+      .item-details h4 {
+        font-size: 12px;
+        line-height: 1.2;
+        margin-bottom: 2px;
+      }
+      
+      .item-details .item-meta {
+        font-size: 10px;
+        color: #888;
+      }
+      
+      /* Make table rows alternate colors for better readability */
+      .item-table tbody tr:nth-child(even) {
+        background-color: #fafafa;
+      }
+      
+      .item-table tbody tr:nth-child(odd) {
+        background-color: #ffffff;
+      }
+      
+      /* Add some spacing between table and summary */
+      .item-table {
+        margin-bottom: 25px;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+    }
+    
+    /* Very small screens (under 400px) */
+    @media screen and (max-width: 400px) {
+      .item-table {
+        font-size: 12px;
+      }
+      
+      .item-table th {
+        font-size: 10px;
+        padding: 6px 3px;
+      }
+      
+      .item-table td {
+        padding: 10px 3px;
+        font-size: 12px;
+      }
+      
+      .item-image {
+        width: 35px;
+        height: 35px;
+      }
+      
+      .item-details h4 {
+        font-size: 11px;
+      }
+      
+      .item-details .item-meta {
+        font-size: 9px;
       }
     }
   </style>
@@ -1209,7 +1314,7 @@ const generateStatusEmail = (order, status) => {
         <thead>
           <tr>
             <th>Item</th>
-            <th>Quantity</th>
+            <th>Qty</th>
             <th>Price</th>
             <th>Total</th>
           </tr>
@@ -1219,24 +1324,24 @@ const generateStatusEmail = (order, status) => {
             .map(
             (item) => `
           <tr>
-            <td data-label="Item">
-              <div style="display: flex; align-items: center; gap: 10px; padding-right:10px;">
+            <td>
+              <div class="item-info">
                 ${item.image ? `<img src="${item.image}" class="item-image" alt="${item.name}">` : ""}
-                <div style="padding-left:10px;">
-                  <div style="font-weight: 600">${item.name}</div>
-                  <div style="font-size: 12px; color: #777">
+                <div class="item-details">
+                  <h4>${item.name}</h4>
+                  <p class="item-meta">
                     ${
                       item.priceOption.type === "weight-based"
                       ? `${item.priceOption.weight}g`
                       : "Packet"
                     }
-                  </div>
+                  </p>
                 </div>
               </div>
             </td>
-            <td data-label="Quantity">${item.quantity}</td> 
-            <td data-label="Price">Rs${nf(item.priceOption.salePrice || item.priceOption.price)}</td>
-            <td data-label="Total">Rs${nf(item.quantity * (item.priceOption.salePrice || item.priceOption.price))}</td>
+            <td>${item.quantity}</td> 
+            <td>Rs${nf(item.priceOption.salePrice || item.priceOption.price)}</td>
+            <td>Rs${nf(item.quantity * (item.priceOption.salePrice || item.priceOption.price))}</td>
           </tr>
           `
             )
