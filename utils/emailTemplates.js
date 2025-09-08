@@ -19,8 +19,6 @@ export const passwordResetEmail = (name, url) => `
     <p style="margin-top: 20px;">This link will expire in 10 minutes.</p>
   </div>
 `;
-
-// Improved Email Templates for Better Deliverability
 export const generateOrderConfirmationEmail = (order) => {
     const orderNumber = order._id.toString().substr(-6);
     const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
@@ -32,13 +30,25 @@ export const generateOrderConfirmationEmail = (order) => {
     // Helper to format numbers to two decimals
     const formatAmount = (amount) => Number(amount || 0).toFixed(2);
 
-    // Calculate sale savings (original price - sale price) * quantity, safely
-    const saleSavings = (order.items || []).reduce((total, item) => {
-        const original = item?.priceOption?.originalPrice ?? item?.priceOption?.price ?? item?.price ?? 0;
-        const sale = item?.priceOption?.salePrice ?? item?.priceOption?.price ?? item?.price ?? 0;
-        const qty = item?.quantity ?? 0;
-        return total + Math.max(0, (original - sale)) * qty;
-    }, 0);
+    // Calculate pricing for each item
+    const items = (order.items || []).map(item => {
+        const price = Math.round(item.priceOption?.price ?? 0);
+        const originalPrice = Math.round(item.priceOption?.originalPrice ?? 0);
+        const quantity = item.quantity ?? 0;
+        const saleSavings = originalPrice > price ? quantity * (originalPrice - price) : 0;
+        return {
+            name: item.product?.name || item.name || 'Item',
+            quantity,
+            price,
+            originalPrice,
+            saleSavings
+        };
+    });
+
+    // Calculate totals
+    const originalSubtotal = items.reduce((sum, item) => sum + item.originalPrice * item.quantity, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const saleSavings = items.reduce((sum, item) => sum + item.saleSavings, 0);
 
     return `
         <!DOCTYPE html>
@@ -78,21 +88,24 @@ export const generateOrderConfirmationEmail = (order) => {
                 
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <h3 style="color: #2c3e50; margin-top: 0;">Order Items</h3>
-                    ${(order.items || []).map(item => `
+                    ${items.map(item => `
                         <div style="border-bottom: 1px solid #eee; padding: 10px 0;">
-                            <p><strong>${item.product?.name || item.name || 'Item'}</strong></p>
-                            <p>Quantity: ${item.quantity ?? 0}</p>
-                            <p>Price: Rs. ${formatAmount(item?.priceOption?.salePrice ?? item?.priceOption?.price ?? item?.price)}</p>
+                            <p><strong>${item.name}</strong></p>
+                            <p>Quantity: ${item.quantity}</p>
+                            <p>Price: Rs. ${formatAmount(item.price)}</p>
+                            ${item.saleSavings > 0 ? `<p>Original Price: Rs. ${formatAmount(item.originalPrice)}</p>` : ''}
+                            ${item.saleSavings > 0 ? `<p>Sale Savings: Rs. ${formatAmount(item.saleSavings)}</p>` : ''}
                         </div>
                     `).join('')}
                 </div>
                 
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <h3 style="color: #2c3e50; margin-top: 0;">Order Summary</h3>
-                    <p><strong>Total:</strong> Rs. ${formatAmount(order.subtotal)}</p>
-                    <p><strong>Sale Savings:</strong> Rs. ${formatAmount(saleSavings)}</p>
-                    <p><strong>Coupon discount:</strong> Rs. ${order.discount ? formatAmount(order.discount) : '0'}</p>
-                    <p><strong>Shipping:</strong> Rs. ${formatAmount(order.shippingCost)}</p>
+                    ${saleSavings > 0 ? `<p><strong>Original Subtotal:</strong> Rs. ${formatAmount(originalSubtotal)}</p>` : ''}
+                    <p><strong>Subtotal:</strong> Rs. ${formatAmount(subtotal)}</p>
+                    ${saleSavings > 0 ? `<p><strong>Sale Savings:</strong> -Rs. ${formatAmount(saleSavings)}</p>` : ''}
+                    <p><strong>Shipping:</strong> ${order.shippingCost === 0 ? "Free" : `Rs. ${formatAmount(order.shippingCost)}`}</p>
+                    ${order.discount > 0 ? `<p><strong>Discount:</strong> -Rs. ${formatAmount(order.discount)}</p>` : ''}
                     ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs. ${formatAmount(order.codFee)}</p>` : ''}
                     <p style="font-size: 18px; font-weight: bold; color: #27ae60; margin-top: 20px;"><strong>Total:</strong> Rs. ${formatAmount(order.totalAmount)}</p>
                 </div>

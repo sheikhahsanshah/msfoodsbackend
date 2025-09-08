@@ -1006,46 +1006,51 @@ const generateOrderEmail = (order) => `
     <p>Payment Method: ${order.paymentMethod}</p>
   </div>
 `;
+
 const generateStatusEmail = (order, status) => {
   const statusInfo = {
-  Processing: {
-    title: "Order Processing",
-    message: "We've received your order and are preparing it for shipment.",
-    color: "#3498db",
-  },
-  Shipped: {
-    title: "Order Shipped!",
-    message: "Your order is on its way to you!",
-    color: "#2ecc71",
-  },
-  Delivered: {
-    title: "Order Delivered",
-    message: "Your order has been successfully delivered.",
-    color: "#27ae60",
-  },
-  Cancelled: {
-    title: "Order Cancelled",
-    message: "Your order has been cancelled as requested.",
-    color: "#e74c3c",
-  },
-  Returned: {
-    title: "Return Processed",
-    message: "We've received your returned items.",
-    color: "#f39c12",
-  },
+    Processing: {
+      title: "Order Processing",
+      message: "We've received your order and are preparing it for shipment.",
+      color: "#3498db",
+    },
+    Shipped: {
+      title: "Order Shipped!",
+      message: "Your order is on its way to you!",
+      color: "#2ecc71",
+    },
+    Delivered: {
+      title: "Order Delivered",
+      message: "Your order has been successfully delivered.",
+      color: "#27ae60",
+    },
+    Cancelled: {
+      title: "Order Cancelled",
+      message: "Your order has been cancelled as requested.",
+      color: "#e74c3c",
+    },
+    Returned: {
+      title: "Return Processed",
+      message: "We've received your returned items.",
+      color: "#f39c12",
+    },
   };
-
-  // Calculate sale savings and coupon discount
-  const saleSavings = order.items.reduce((total, item) => {
-  const original = item.priceOption.originalPrice || item.priceOption.price;
-  const sale = item.priceOption.salePrice || item.priceOption.price;
-  return total + (original - sale) * item.quantity;
-  }, 0);
-
-  const couponDiscount = order.discount || 0;
 
   // Helper to remove floating points
   const nf = (num) => Math.round(num);
+
+  // Calculate sale savings based on the correct logic
+  const saleSavings = order.items.reduce((total, item) => {
+    const originalPrice = item.priceOption.originalPrice || 0;
+    const currentPrice = item.priceOption.salePrice || item.priceOption.price;
+    return total + (originalPrice > currentPrice ? item.quantity * (originalPrice - currentPrice) : 0);
+  }, 0);
+
+  const couponDiscount = order.discount || 0;
+  const originalSubtotal = order.items.reduce((total, item) => {
+    const originalPrice = item.priceOption.originalPrice || item.priceOption.price;
+    return total + item.quantity * originalPrice;
+  }, 0);
 
   return `
 <!DOCTYPE html>
@@ -1155,21 +1160,33 @@ const generateStatusEmail = (order, status) => {
         padding: 10px;
       }
       .item-table td {
-        display: block;
-        text-align: right;
-        border-bottom: none;
+        display: flex; /* Change to flex */
+        justify-content: space-between; /* To align label and value */
+        align-items: center; /* Vertically center them */
         padding: 5px 0;
-        position: relative;
+        border-bottom: none;
       }
       .item-table td:before {
         content: attr(data-label);
-        position: absolute;
-        left: 10px;
         font-weight: 600;
         color: #555;
       }
       .item-table td:first-of-type {
         text-align: left;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .item-table td:first-of-type:before {
+        display: none;
+      }
+      .item-image {
+        margin-right: 10px;
+      }
+      .item-details {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
     }
   </style>
@@ -1227,11 +1244,13 @@ const generateStatusEmail = (order, status) => {
         </tbody>
       </table>
       <div style="text-align: left; margin-top: 20px">
-        <p><strong>Total:</strong> Rs${nf(order.subtotal)}</p>
-        ${saleSavings !== 0 ? `<p><strong>Sale Savings:</strong> -Rs${nf(saleSavings)}</p>` : ""}
-        ${couponDiscount !== 0 ? `<p><strong>Coupon discount:</strong> -Rs${nf(couponDiscount)}</p>` : ""}
+        ${saleSavings > 0 ? `<p><strong>Original Subtotal:</strong> <span style="text-decoration: line-through;">Rs${nf(originalSubtotal)}</span></p>` : ""}
+        <p><strong>Subtotal:</strong> Rs${nf(order.subtotal)}</p>
+        ${saleSavings > 0 ? `<p><strong>Sale Savings:</strong> <span style="color: #2ecc71;">-Rs${nf(saleSavings)}</span></p>` : ""}
         <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
+        ${couponDiscount > 0 ? `<p><strong>Coupon discount:</strong> <span style="color: #2ecc71;">-Rs${nf(couponDiscount)}</span></p>` : ""}
         ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
+        <div style="border-top: 1px solid #eee; margin: 15px 0;"></div>
         <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
         <strong>Total:</strong> Rs${nf(order.totalAmount)}
         </p>
