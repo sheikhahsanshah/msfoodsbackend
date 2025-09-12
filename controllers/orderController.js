@@ -1,6 +1,7 @@
 // controllers/orderController.js
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
+import moment from "moment";
 import Coupon from "../models/Coupon.js";
 import Settings from "../models/Settings.js";
 import User from "../models/User.js";
@@ -370,7 +371,6 @@ export const orderController = {
     }
   },
 
-  // Get sales statistics (Admin)
   getSalesStats: async (req, res) => {
     try {
       const { period, startDate, endDate } = req.query;
@@ -407,14 +407,11 @@ export const orderController = {
             totalDiscount: 1,
             totalCodFee: 1,
             couponsUsed: 1,
-            // Profit is revenue minus the cost of goods. Since we don't track COGS,
-            // we can't calculate it yet. Setting to 0 as a placeholder.
             totalProfit: { $literal: 0 },
           },
         },
       ]);
 
-      // Calculate sale discounts from order items
       const saleDiscountsResult = await Order.aggregate([
         {
           $match: {
@@ -459,12 +456,8 @@ export const orderController = {
         },
       ]);
 
-      const totalSaleDiscounts =
-        saleDiscountsResult.length > 0
-          ? saleDiscountsResult[0].totalSaleDiscounts
-          : 0;
-      const totalDiscounts =
-        (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
+      const totalSaleDiscounts = saleDiscountsResult.length > 0 ? saleDiscountsResult[0].totalSaleDiscounts : 0;
+      const totalDiscounts = (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
 
       const result = stats[0] || {
         totalOrders: 0,
@@ -477,14 +470,14 @@ export const orderController = {
         totalProfit: 0,
       };
 
-      // Update the result with total discounts including sale discounts
       result.totalDiscount = totalDiscounts;
       result.totalSaleDiscounts = totalSaleDiscounts;
       result.totalCouponDiscounts = stats[0]?.totalDiscount || 0;
 
       handleResponse(res, 200, "Sales stats retrieved", result);
     } catch (error) {
-      handleError(res, 500, error.message);
+      console.error("Error in getSalesStats:", error.message);
+      handleError(res, 500, "An internal server error occurred while fetching sales data.");
     }
   },
 };
@@ -949,32 +942,46 @@ const updateOrderFromPayment = (order, data) => {
   }
 };
 
+// This function needs to be defined to handle date ranges
 const getDateRange = (period, startDate, endDate) => {
-  const now = new Date();
-  let start;
+  const now = moment();
+  let start, end;
 
-  switch (period.toLowerCase()) {
+  switch (period?.toLowerCase()) {
     case "week":
-      start = new Date(now.setDate(now.getDate() - 7));
+      start = now.clone().subtract(7, "days").startOf("day");
+      end = now.endOf("day");
       break;
     case "month":
-      start = new Date(now.setMonth(now.getMonth() - 1));
+      start = now.clone().subtract(30, "days").startOf("day");
+      end = now.endOf("day");
       break;
     case "year":
-      start = new Date(now.setFullYear(now.getFullYear() - 1));
+      start = now.clone().subtract(365, "days").startOf("day");
+      end = now.endOf("day");
+      break;
+    case "custom":
+      // Validate custom dates
+      const customStart = moment(startDate);
+      const customEnd = moment(endDate);
+      if (customStart.isValid() && customEnd.isValid() && customStart.isBefore(customEnd)) {
+        start = customStart.startOf("day");
+        end = customEnd.endOf("day");
+      } else {
+        // Fallback to a default if custom dates are invalid
+        console.error("Invalid custom date range provided. Defaulting to last 7 days.");
+        start = now.clone().subtract(7, "days").startOf("day");
+        end = now.endOf("day");
+      }
       break;
     default:
-      start = new Date(0);
+      // Default to last 7 days if period is invalid or missing
+      start = now.clone().subtract(7, "days").startOf("day");
+      end = now.endOf("day");
+      break;
   }
 
-  if (startDate && endDate) {
-    start = new Date(startDate);
-    endDate = new Date(endDate);
-  } else {
-    endDate = new Date();
-  }
-
-  return { $gte: start, $lte: endDate };
+  return { $gte: start.toDate(), $lte: end.toDate() };
 };
 
 const generateOrderEmail = (order) => `

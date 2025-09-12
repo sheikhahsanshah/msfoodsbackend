@@ -304,7 +304,7 @@ export const generateMarketingEmail = (subject, content, images = [], recipientN
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     ${processedContent}
                 </div>
-                <div style="text-align: center; margin: 30px 0;">
+                <div style="text-align: center; margin: 30px 0;">   
                     <a href="https://msfoods.pk" style="background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Visit Our Store</a>
                 </div>
                 <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
