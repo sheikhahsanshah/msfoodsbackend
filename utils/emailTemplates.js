@@ -270,7 +270,7 @@ export const generateContactFormEmail = (contactData) => {
     `;
 };
 
-export const generateMarketingEmail = (subject, content, images = []) => {
+export const generateMarketingEmail = (subject, content, images = [], recipientName = "") => {
     // Handle images as objects with url and alt properties
     const imageHtml = images.length > 0 ?
         images.map(img => {
@@ -300,15 +300,13 @@ export const generateMarketingEmail = (subject, content, images = []) => {
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
                 <h1 style="color: #2c3e50; text-align: center; margin-bottom: 30px;">MS Foods</h1>
-                
+                ${recipientName ? `<h2 style="color: #2d3748;">Hi ${recipientName},</h2>` : ""}
                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     ${processedContent}
                 </div>
-                
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="https://msfoods.pk" style="background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Visit Our Store</a>
                 </div>
-                
                 <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
                 <p style="font-size: 12px; color: #666; text-align: center;">
                     You received this email because you're subscribed to MS Foods updates.<br>

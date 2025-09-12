@@ -1353,9 +1353,8 @@ const generateStatusEmail = (order, status) => {
         ${saleSavings > 0 ? `<p><strong>Original Subtotal:</strong> <span style="text-decoration: line-through;">Rs${nf(originalSubtotal)}</span></p>` : ""}
         <p><strong>Subtotal:</strong> Rs${nf(order.subtotal)}</p>
         ${saleSavings > 0 ? `<p><strong>Sale Savings:</strong> <span style="color: #2ecc71;">-Rs${nf(saleSavings)}</span></p>` : ""}
-        <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
         ${couponDiscount > 0 ? `<p><strong>Coupon discount:</strong> <span style="color: #2ecc71;">-Rs${nf(couponDiscount)}</span></p>` : ""}
-        ${order.codFee > 0 ? `<p><strong>COD Fee:</strong> Rs${nf(order.codFee)}</p>` : ""}
+        <p><strong>Shipping:</strong> Rs${nf(order.shippingCost)}</p>
         <div style="border-top: 1px solid #eee; margin: 15px 0;"></div>
         <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
         <strong>Total:</strong> Rs${nf(order.totalAmount)}
