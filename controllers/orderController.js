@@ -21,7 +21,7 @@ export const orderController = {
     try {
       // 1) Extract & parse body fields
       let { paymentMethod, couponCode } = req.body;
-      let items = req.body.items; 
+      let items = req.body.items;
       let shippingAddress = req.body.shippingAddress;
 
       // If sent as FormData, these arrive as strings → parse them
@@ -370,12 +370,54 @@ export const orderController = {
       res.status(500).send("Server error");
     }
   },
-getSalesStats: async (req, res) => {
+}
+// Standalone getSalesStats function
+export async function getSalesStats(req, res) {
   try {
+    console.log("getSalesStats called");
     const { period, startDate, endDate } = req.query;
     console.log("getSalesStats called with:", { period, startDate, endDate });
 
-    const dateRange = getDateRange(period, startDate, endDate);
+    // Use moment-based getDateRange
+    const now = moment();
+    let start, end;
+    switch (period?.toLowerCase()) {
+      case "week":
+        start = now.clone().subtract(7, "days").startOf("day");
+        end = now.endOf("day");
+        break;
+      case "month":
+        start = now.clone().subtract(30, "days").startOf("day");
+        end = now.endOf("day");
+        break;
+      case "year":
+        start = now.clone().subtract(365, "days").startOf("day");
+        end = now.endOf("day");
+        break;
+      case "custom":
+        const customStart = moment(startDate);
+        const customEnd = moment(endDate);
+        if (
+          customStart.isValid() &&
+          customEnd.isValid() &&
+          customStart.isBefore(customEnd)
+        ) {
+          start = customStart.startOf("day");
+          end = customEnd.endOf("day");
+        } else {
+          console.error(
+            "Invalid custom date range provided. Defaulting to last 7 days."
+          );
+          start = now.clone().subtract(7, "days").startOf("day");
+          end = now.endOf("day");
+        }
+        break;
+      default:
+        start = now.clone().subtract(7, "days").startOf("day");
+        end = now.endOf("day");
+        break;
+    }
+    const dateRange = { $gte: start.toDate(), $lte: end.toDate() };
     console.log("Computed dateRange:", dateRange);
 
     const stats = await Order.aggregate([
@@ -495,9 +537,7 @@ getSalesStats: async (req, res) => {
       "An internal server error occurred while fetching sales data."
     );
   }
-},
-
-};
+}
 
 // Helper Functions
 const processOrderItems = async (items, session) => {
@@ -981,12 +1021,18 @@ const getDateRange = (period, startDate, endDate) => {
       // Validate custom dates
       const customStart = moment(startDate);
       const customEnd = moment(endDate);
-      if (customStart.isValid() && customEnd.isValid() && customStart.isBefore(customEnd)) {
+      if (
+        customStart.isValid() &&
+        customEnd.isValid() &&
+        customStart.isBefore(customEnd)
+      ) {
         start = customStart.startOf("day");
         end = customEnd.endOf("day");
       } else {
         // Fallback to a default if custom dates are invalid
-        console.error("Invalid custom date range provided. Defaulting to last 7 days.");
+        console.error(
+          "Invalid custom date range provided. Defaulting to last 7 days."
+        );
         start = now.clone().subtract(7, "days").startOf("day");
         end = now.endOf("day");
       }
@@ -1015,7 +1061,7 @@ const generateOrderEmail = (order) => `
     <ul>
       ${order.items
         .map(
-        (item) => `
+          (item) => `
         <li>
           ${item.name} - 
           ${item.quantity} packets
@@ -1067,12 +1113,18 @@ const generateStatusEmail = (order, status) => {
   const saleSavings = order.items.reduce((total, item) => {
     const originalPrice = item.priceOption.originalPrice || 0;
     const currentPrice = item.priceOption.salePrice || item.priceOption.price;
-    return total + (originalPrice > currentPrice ? item.quantity * (originalPrice - currentPrice) : 0);
+    return (
+      total +
+      (originalPrice > currentPrice
+        ? item.quantity * (originalPrice - currentPrice)
+        : 0)
+    );
   }, 0);
 
   const couponDiscount = order.discount || 0;
   const originalSubtotal = order.items.reduce((total, item) => {
-    const originalPrice = item.priceOption.originalPrice || item.priceOption.price;
+    const originalPrice =
+      item.priceOption.originalPrice || item.priceOption.price;
     return total + item.quantity * originalPrice;
   }, 0);
 
@@ -1347,7 +1399,7 @@ const generateStatusEmail = (order, status) => {
         <tbody>
           ${order.items
             .map(
-            (item) => `
+              (item) => `
           <tr>
             <td>
               <div class="item-info">
@@ -1357,8 +1409,8 @@ const generateStatusEmail = (order, status) => {
                   <p class="item-meta">
                     ${
                       item.priceOption.type === "weight-based"
-                      ? `${item.priceOption.weight}g`
-                      : "Packet"
+                        ? `${item.priceOption.weight}g`
+                        : "Packet"
                     }
                   </p>
                 </div>
@@ -1460,11 +1512,9 @@ export async function verifyPayment(req, res, next) {
   try {
     const { paymentStatus } = req.body; // expected: 'Confirmed' or 'Declined'
     if (!["Confirmed", "Declined"].includes(paymentStatus)) {
-      return res
-        .status(400)
-        .json({
-          message: 'Invalid paymentStatus. Must be "Confirmed" or "Declined".',
-        });
+      return res.status(400).json({
+        message: 'Invalid paymentStatus. Must be "Confirmed" or "Declined".',
+      });
     }
 
     const order = await Order.findById(req.params.id);
