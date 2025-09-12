@@ -370,116 +370,133 @@ export const orderController = {
       res.status(500).send("Server error");
     }
   },
+getSalesStats: async (req, res) => {
+  try {
+    const { period, startDate, endDate } = req.query;
+    console.log("getSalesStats called with:", { period, startDate, endDate });
 
-  getSalesStats: async (req, res) => {
-    try {
-      const { period, startDate, endDate } = req.query;
-      const dateRange = getDateRange(period, startDate, endDate);
+    const dateRange = getDateRange(period, startDate, endDate);
+    console.log("Computed dateRange:", dateRange);
 
-      const stats = await Order.aggregate([
-        {
-          $match: {
-            createdAt: dateRange,
-            status: { $nin: ["Cancelled", "Returned"] },
+    const stats = await Order.aggregate([
+      {
+        $match: {
+          createdAt: dateRange,
+          status: { $nin: ["Cancelled", "Returned"] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: "$totalAmount" },
+          totalSales: { $sum: "$subtotal" },
+          totalShipping: { $sum: "$shippingCost" },
+          totalDiscount: { $sum: "$discount" },
+          totalCodFee: { $sum: "$codFee" },
+          couponsUsed: {
+            $sum: { $cond: [{ $ne: ["$couponUsed", null] }, 1, 0] },
           },
         },
-        {
-          $group: {
-            _id: null,
-            totalOrders: { $sum: 1 },
-            totalRevenue: { $sum: "$totalAmount" },
-            totalSales: { $sum: "$subtotal" },
-            totalShipping: { $sum: "$shippingCost" },
-            totalDiscount: { $sum: "$discount" },
-            totalCodFee: { $sum: "$codFee" },
-            couponsUsed: {
-              $sum: { $cond: [{ $ne: ["$couponUsed", null] }, 1, 0] },
+      },
+      {
+        $project: {
+          _id: 0,
+          totalOrders: 1,
+          totalRevenue: 1,
+          totalSales: 1,
+          totalShipping: 1,
+          totalDiscount: 1,
+          totalCodFee: 1,
+          couponsUsed: 1,
+          totalProfit: { $literal: 0 },
+        },
+      },
+    ]);
+
+    console.log("Stats aggregation result:", stats);
+
+    const saleDiscountsResult = await Order.aggregate([
+      {
+        $match: {
+          createdAt: dateRange,
+          status: { $nin: ["Cancelled", "Returned"] },
+        },
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: null,
+          totalSaleDiscounts: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$items.priceOption.originalPrice", null] },
+                    {
+                      $gt: [
+                        "$items.priceOption.originalPrice",
+                        "$items.priceOption.price",
+                      ],
+                    },
+                  ],
+                },
+                {
+                  $multiply: [
+                    {
+                      $subtract: [
+                        "$items.priceOption.originalPrice",
+                        "$items.priceOption.price",
+                      ],
+                    },
+                    "$items.quantity",
+                  ],
+                },
+                0,
+              ],
             },
           },
         },
-        {
-          $project: {
-            _id: 0,
-            totalOrders: 1,
-            totalRevenue: 1,
-            totalSales: 1,
-            totalShipping: 1,
-            totalDiscount: 1,
-            totalCodFee: 1,
-            couponsUsed: 1,
-            totalProfit: { $literal: 0 },
-          },
-        },
-      ]);
+      },
+    ]);
 
-      const saleDiscountsResult = await Order.aggregate([
-        {
-          $match: {
-            createdAt: dateRange,
-            status: { $nin: ["Cancelled", "Returned"] },
-          },
-        },
-        { $unwind: "$items" },
-        {
-          $group: {
-            _id: null,
-            totalSaleDiscounts: {
-              $sum: {
-                $cond: [
-                  {
-                    $and: [
-                      { $ne: ["$items.priceOption.originalPrice", null] },
-                      {
-                        $gt: [
-                          "$items.priceOption.originalPrice",
-                          "$items.priceOption.price",
-                        ],
-                      },
-                    ],
-                  },
-                  {
-                    $multiply: [
-                      {
-                        $subtract: [
-                          "$items.priceOption.originalPrice",
-                          "$items.priceOption.price",
-                        ],
-                      },
-                      "$items.quantity",
-                    ],
-                  },
-                  0,
-                ],
-              },
-            },
-          },
-        },
-      ]);
+    console.log("Sale discounts aggregation result:", saleDiscountsResult);
 
-      const totalSaleDiscounts = saleDiscountsResult.length > 0 ? saleDiscountsResult[0].totalSaleDiscounts : 0;
-      const totalDiscounts = (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
+    const totalSaleDiscounts =
+      saleDiscountsResult.length > 0
+        ? saleDiscountsResult[0].totalSaleDiscounts
+        : 0;
+    const totalDiscounts =
+      (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
 
-      const result = stats[0] || {
-        totalOrders: 0,
-        totalRevenue: 0,
-        totalSales: 0,
-        totalShipping: 0,
-        totalDiscount: 0,
-        totalCodFee: 0,
-        couponsUsed: 0,
-        totalProfit: 0,
-      };
+    const result = stats[0] || {
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalSales: 0,
+      totalShipping: 0,
+      totalDiscount: 0,
+      totalCodFee: 0,
+      couponsUsed: 0,
+      totalProfit: 0,
+    };
 
-      result.totalDiscount = totalDiscounts;
-      result.totalSaleDiscounts = totalSaleDiscounts;
-      result.totalCouponDiscounts = stats[0]?.totalDiscount || 0;
+    result.totalDiscount = totalDiscounts;
+    result.totalSaleDiscounts = totalSaleDiscounts;
+    result.totalCouponDiscounts = stats[0]?.totalDiscount || 0;
 
-      handleResponse(res, 200, "Sales stats retrieved", result);
-    } catch (error) {
-      console.error("Error in getSalesStats:", error.message);
-      handleError(res, 500, "An internal server error occurred while fetching sales data.");
-    }
-  },
+    console.log("Final computed result:", result);
+
+    handleResponse(res, 200, "Sales stats retrieved", result);
+  } catch (error) {
+    console.error("Error in getSalesStats:", error);
+    handleError(
+      res,
+      500,
+      "An internal server error occurred while fetching sales data."
+    );
+  }
+},
+
 };
 
 // Helper Functions
