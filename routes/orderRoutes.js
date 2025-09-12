@@ -12,7 +12,7 @@ router.get('/my-orders', protect, orderController.getUserOrders);
 router.get('/:id', protect, orderController.getOrderById);
 
 
-router.get('/sales', protect, admin, orderController.getSalesStats);
+router.get('/sales',  orderController.getSalesStats);
 router.post('/notify', orderController.handlePayfastNotification);
 router.get('/', protect, admin, orderController.getAllOrders);
 router.put('/:id/status', protect, admin, orderController.updateOrderStatus);
