@@ -163,38 +163,6 @@ export const orderController = {
     }
   },
 
-  // Get order by ID
-  getOrderById: async (req, res) => {
-    try {
-      const order = await Order.findById(req.params.id)
-        .populate({
-          path: "user",
-          select: "name email phone",
-        })
-        .populate({
-          path: "items.product",
-          select: "name images priceOptions",
-        })
-        .populate({
-          path: "couponUsed",
-          select: "code discountType discountValue eligibleProducts",
-          populate: {
-            path: "eligibleProducts",
-            model: "Product",
-            select: "_id name",
-          },
-        });
-
-      if (!order) return handleError(res, 404, "Order not found");
-      if (!authorizeOrderAccess(order, req.user))
-        return handleError(res, 403, "Unauthorized");
-
-      handleResponse(res, 200, "Order retrieved", order);
-    } catch (error) {
-      handleError(res, 500, error.message);
-    }
-  },
-
   // Get user orders
   getUserOrders: async (req, res) => {
     try {
@@ -370,7 +338,56 @@ export const orderController = {
       res.status(500).send("Server error");
     }
   },
+};
+// Get order by ID
+
+export async function getOrderById(req, res) {
+  try {
+    console.log("getOrderById called with params.id:", req.params.id);
+    const order = await Order.findById(req.params.id)
+      .populate({
+        path: "user",
+        select: "name email phone",
+      })
+      .populate({
+        path: "items.product",
+        select: "name images priceOptions",
+      })
+      .populate({
+        path: "couponUsed",
+        select: "code discountType discountValue eligibleProducts",
+        populate: {
+          path: "eligibleProducts",
+          model: "Product",
+          select: "_id name",
+        },
+      });
+
+    console.log("Order found:", order ? "Yes" : "No");
+    if (!order) {
+      console.log("Order not found for id:", req.params.id);
+      return handleError(res, 404, "Order not found");
+    }
+
+    // If order.user is missing, manually add user info from request
+    if (!order.user) {
+      const { name, email, phone } = req.body.user || req.body || {};
+      const orderObj = order.toObject();
+      orderObj.user = {
+        name: name || "",
+        email: email || "",
+        phone: phone || "",
+      };
+      console.log("Added user info from request to order:", orderObj);
+      return handleResponse(res, 200, "Order retrieved", orderObj);
+    }
+    handleResponse(res, 200, "Order retrieved", order);
+  } catch (error) {
+    console.log("Error in getOrderById:", error.message);
+    handleError(res, 500, error.message);
+  }
 }
+
 // Standalone getSalesStats function
 export async function getSalesStats(req, res) {
   try {
@@ -508,8 +525,7 @@ export async function getSalesStats(req, res) {
       saleDiscountsResult.length > 0
         ? saleDiscountsResult[0].totalSaleDiscounts
         : 0;
-    const totalDiscounts =
-      (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
+    const totalDiscounts = (stats[0]?.totalDiscount || 0) + totalSaleDiscounts;
 
     const result = stats[0] || {
       totalOrders: 0,
