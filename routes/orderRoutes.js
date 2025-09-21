@@ -12,7 +12,6 @@ router.post('/:id', getOrderById);
 router.post('/', optionalAuth, uploadPaymentProof, orderController.createOrder);
 router.get('/my-orders', protect, orderController.getUserOrders);
 
-
 router.post('/notify', orderController.handlePayfastNotification);
 router.get('/', protect, admin, orderController.getAllOrders);
 router.put('/:id/status', protect, admin, orderController.updateOrderStatus);
